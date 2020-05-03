@@ -1,14 +1,42 @@
-import logging as log
-from Population import *
-from PoissonPopulation import *
-from Network import *
-from AxonalSerotoninReceptorFactory import *
-from SomaticSerotoninReceptorFactory import *
+from Population import Population
+from PoissonPopulation import PoissonPopulation
+from Network import Network
+from AxonalSerotoninReceptorFactory import AxonalSerotoninReceptorFactory
+from SomaticSerotoninReceptorFactory import SomaticSerotoningReceptorFactory
 from random import random, gauss
 import functools
 
 # TODO: change imports to a "import <file>" format, then call them with
 # <file>.<class>
+
+
+"""
+Build two columns of input, pyramidal, fast spiking, and low threshold neurons with apporpriate interconnections.
+
+INA -> PYA
+INB -> PYB
+INA -> PYB
+INB -> PYA
+
+PYA -> PYA
+PYA -> PYA
+PYB -> PYB
+PYB -> PYB
+
+PYA -> FSA
+FSA -> FSA
+PYA -> LTA
+
+PYB -> FSB
+FSB -> PYB
+PYB -> LTA
+
+LTA -> PYB
+LTA -> FSB
+
+LTB -> PYA
+LYB -> FSB
+"""
 
 
 class TwoColumnNetwork(Network):

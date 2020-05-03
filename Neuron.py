@@ -1,4 +1,5 @@
 from random import gauss
+from absl import logging
 from pylab import *
 from scipy import *
 from numpy import *
@@ -93,13 +94,17 @@ class Neuron:
         self.dudt = lambda v, u: (self.a * (self.b * (v - self.v_r) - u))
 
         # self.dQ_AMPA = lambda vlist: ((1-vlist[0])*self.K - (vlist[0]/self.tau_r_AMPA))/self.tau
-        # self.dg_AMPA = lambda vlist: ((self.tau_f_AMPA + self.tau_r_AMPA)/self.tau_fAMPA)*((2/self.tau_r_AMPA)*(1-vlist[0])*vlist[1]-(vlist[0]/self.tau_f))/self.tau
+        # self.dg_AMPA = lambda vlist: ((self.tau_f_AMPA +
+        # self.tau_r_AMPA)/self.tau_fAMPA)*((2/self.tau_r_AMPA)*(1-vlist[0])*vlist[1]-(vlist[0]/self.tau_f))/self.tau
 
         # self.dQ_NMDA = lambda vlist: ((1 - vlist[0]) * self.K - (vlist[0] / self.tau_r_NMDA)) / self.tau
-        # self.dg_NMDA = lambda vlist: ((self.tau_f_NMDA + self.tau_r_NMDA) / self.tau_f_NMDA) * ((2 / self.tau_r_NMDA) * (1 - vlist[0]) * vlist[1] - (vlist[0] / self.tau_f_NMDA)) / self.tau
+        # self.dg_NMDA = lambda vlist: ((self.tau_f_NMDA + self.tau_r_NMDA) /
+        # self.tau_f_NMDA) * ((2 / self.tau_r_NMDA) * (1 - vlist[0]) * vlist[1]
+        # - (vlist[0] / self.tau_f_NMDA)) / self.tau
 
         # self.dQ_GABA = lambda q_GABA: ((1-q_GABA)*self.K - (q_GABA/self.tau_r))/self.tau
-        # self.dg_GABA = lambda g_GABA, q: ((self.tau_f + self.tau_r)/self.tau_f)*((2/self.tau_r)*(1-self.g_SD)*self.Q-(self.g_SD/self.tau_f))/self.tau
+        # self.dg_GABA = lambda g_GABA, q: ((self.tau_f +
+        # self.tau_r)/self.tau_f)*((2/self.tau_r)*(1-self.g_SD)*self.Q-(self.g_SD/self.tau_f))/self.tau
 
         # Recording variables
         self.vv = []
@@ -125,14 +130,12 @@ class Neuron:
                 somaticReceptor.setLevel(
                     self.diffuseTransmitters[somaticReceptor.getTypeString()])
             except KeyError:
-                print(
-                    "WARNING: There are somatic receptors of type " +
-                    somaticReceptor.getTypeString() +
-                    " on neuron " +
-                    self.name +
-                    " in population " +
-                    self.parentPopulation.name +
-                    ", which does not currently have any transmitter levels set for that type.  Defaulting to a level of 0.0")
+                logging.WARN(
+                    "Somatic receptors of type %s on neuron %s in population %s, which does not currently have any transmitter levels set for that type.  Defaulting to a level of 0.0" %
+                    (somaticReceptor.getTypeString(),
+                    self.name,
+                    self.parentPopulation.name)
+                    )
                 somaticReceptor.setLevel(0.0)
 
         # Reset Diffuse Current and Neural Parameters
@@ -177,8 +180,7 @@ class Neuron:
         return self.outputs
 
     def addSynapticTransmission(self, current):
-        if self.debug:
-            print("INCOMING SPIKE!")
+        logging.debug("Spike on neuron %s" % self.name)
         self.synapticInput += current
 
     def rk4OneStep(self, dvdt, dudt, v, u, h):
@@ -201,31 +203,14 @@ class Neuron:
         self.time += self.tau
         # self.synapticInput = self.g_AMPA + self.g_NMDA - self.g_GABA
         self.I = self.externalInput + self.synapticInput + self.diffuseCurrent
-        # print(self.name, ":", self.synapticInput, "/", self.I)
+        logging.debug("%s: %f/%f" % (self.name, self.synapticInput, self.I)
         self.ii.append(self.I)
 
-        # # Euler
-        # # self.v = self.v + self.tau*(self.k*(self.v-self.v_r)*(self.v-self.v_t)-self.u+self.I)/self.C
-        # self.v = self.v + self.tau*((0.04*self.v**2 + (5*self.v) + 140 - self.u + self.I) / self.C)
-        # self.u = self.u + self.tau*(self.a*(self.b*(self.v-self.v_r)-self.u))
-
-        # self.Q_AMPA = self.Q_AMPA + self.tau*((1-self.Q_AMPA)*self.K_GLUT - (self.Q_AMPA/self.tau_r_AMPA))
-        # self.g_AMPA = self.g_AMPA + self.tau*((self.tau_f_AMPA + self.tau_r_AMPA)/self.tau_f_AMPA)*((2/self.tau_r_AMPA)*(1-self.g_AMPA)*self.Q_AMPA-(self.g_AMPA/self.tau_f_AMPA))
-
-        # self.Q_NMDA = self.Q_NMDA + self.tau*((1-self.Q_NMDA)*self.K_GLUT - (self.Q_NMDA/self.tau_r_NMDA))
-        # self.g_NMDA = self.g_NMDA + self.tau*((self.tau_f_NMDA + self.tau_r_NMDA)/self.tau_f_NMDA)*((2/self.tau_r_NMDA)*(1-self.g_NMDA)*self.Q_NMDA-(self.g_NMDA/self.tau_f_NMDA))
-
-        # self.Q_GABA = self.Q_GABA + self.tau*((1-self.Q_GABA)*self.K_GABA - (self.Q_GABA/self.tau_r_GABA))
-        # self.g_GABA = self.g_GABA + self.tau*((self.tau_f_GABA + self.tau_r_GABA)/self.tau_f_GABA)*((2/self.tau_r_GABA)*(1-self.g_GABA)*self.Q_GABA-(self.g_GABA/self.tau_f_GABA))
-
-        # # Uncomment this line if you want to simulate M-Currents
-        # # self.b = self.b + ((0.25-self.b) + (0.02 - self.b)*(max((self.V + 67),0)))/100
-
         # Runge-Kutta
-        [dv, du] = self.rk4OneStep(
+        [dv, du]=self.rk4OneStep(
             self.dvdt, self.dudt, self.v, self.u, self.tau)
-        self.v = self.v + dv
-        self.u = self.u + du
+        self.v=self.v + dv
+        self.u=self.u + du
 
         self.vv.append(self.v)
         self.bb.append(self.b)
@@ -235,24 +220,19 @@ class Neuron:
             self.spikeRecord.append(self.time)
             for receptor in self.postSynapticReceptors:
                 receptor.postSynapticSpikeFeedback()
-            self.v = self.c
-            self.u = self.u + self.d
-            if self.debug:
-                print("SPIKE!")
+            self.v=self.c
+            self.u=self.u + self.d
+            logging.debug("Spike on Neuron %s" % self.name)
             for axon in self.outputs:
                 axon.enqueue()
         if self.u > 500:
-            self.u = 500
+            self.u=500
 
-        self.synapticInput = 0
-
-        # self.diffuseCurrent = 0
-        # self.K_GLUT = 0
-        # self.K_GABA = 0
+        self.synapticInput=0
 
     def getState(self):
-        vars = {}
-        vars["V"] = self.v
-        vars["u"] = self.u
-        vars["b"] = self.b
+        vars={}
+        vars["V"]=self.v
+        vars["u"]=self.u
+        vars["b"]=self.b
         return vars

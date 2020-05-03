@@ -79,7 +79,6 @@ class TwoColumnSimulation():
         for x in range(len(self.network.populations["InputB"].cells)):
             for y in range(len(self.network.populations["pyramidalsA"].cells)):
                 for source in self.network.populations["InputB"].cells[x].outputs:
-                    # print(source.target.name, sim.network.populations["pyramidalsA"].cells[y].name)
                     if source.target == self.network.populations["pyramidalsA"].cells[y]:
                         source.postSynapticReceptors[0].plasticity = True
                         source.postSynapticReceptors[0].c_p = 180.3
@@ -112,7 +111,6 @@ class TwoColumnSimulation():
         for x in range(len(self.network.populations["InputB"].cells)):
             for y in range(len(self.network.populations["pyramidalsA"].cells)):
                 for source in self.network.populations["InputB"].cells[x].outputs:
-                    # print(source.target.name, sim.network.populations["pyramidalsA"].cells[y].name)
                     if source.target == self.network.populations["pyramidalsA"].cells[y]:
                         source.postSynapticReceptors[0].plasticity = False
 
@@ -124,11 +122,6 @@ class TwoColumnSimulation():
             if t % FLAGS.steps_between_timing_debug == 0:
                 logging.debug("Phase 4 step: %d" % t)
             self.network.step()
-
-        # for t in self.tspan:
-        #     # if t % 10 == 0:
-        #     print("Time: ", t)
-        #     self.network.step()
 
         self.aEndOfFourthPortionSpikes = [
             len(c.spikeRecord) for c in self.network.populations["pyramidalsA"].cells]

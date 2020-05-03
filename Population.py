@@ -43,11 +43,10 @@ class Population():
             Neuron(
                 self.tau,
                 self.cellParameters,
-                self.name +
-                "." +
-                self.cellParameters["type"] +
-                "." +
-                str(i)) for i in range(popCount)]
+                "%s.%s.%d" %
+                (self.name,
+                 self.cellParameters["type"],
+                 i)) for i in range(popCount)]
         for cell in self.cells:
             for receptorFactory in self.diffuseSomaReceptorFactories:
                 tempReceptorLevel = 0.0
