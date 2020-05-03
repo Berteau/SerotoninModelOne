@@ -2,12 +2,20 @@
 from numpy.random import poisson
 from Neuron import *
 
+
 class PoissonNeuron(Neuron):
-    def __init__(self, tau, meanSpikesPerSecond, name, outputs=None, parentPop=None):
+    def __init__(
+            self,
+            tau,
+            meanSpikesPerSecond,
+            name,
+            outputs=None,
+            parentPop=None):
         # Determine Lambda and set up our poisson distribution
         self.expectedMeanSpikeRate = meanSpikesPerSecond
         self.meanSpikeProbabilityPerMs = (self.expectedMeanSpikeRate / 10)
-        self.poissonLambda = self.meanSpikeProbabilityPerMs * tau # Lambda mean probability of a spike per timestep (plus variance).
+        # Lambda mean probability of a spike per timestep (plus variance).
+        self.poissonLambda = self.meanSpikeProbabilityPerMs * tau
         # self.poissonDistribution = poisson(self.poissonLambda)
         # print(self.poissonDistribution)
         self.name = name

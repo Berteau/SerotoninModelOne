@@ -1,8 +1,17 @@
 from PoissonNeuron import *
 from Population import *
 
+
 class PoissonPopulation(Population):
-    def __init__(self, tau, neuronParameters, popCount, diffuseSomaReceptorFactories, diffuseTransmitters, parentNetwork, name):
+    def __init__(
+            self,
+            tau,
+            neuronParameters,
+            popCount,
+            diffuseSomaReceptorFactories,
+            diffuseTransmitters,
+            parentNetwork,
+            name):
         self.name = name
         self.tau = tau
         self.time = 0
@@ -16,7 +25,16 @@ class PoissonPopulation(Population):
         self.influenceRecord = {}
 
         # Generate Cells
-        self.cells = [PoissonNeuron(self.tau, self.meanSpikesPerSecond, self.name + "." + self.cellParameters["type"] + "." + str(i), parentPop=self) for i in range(popCount)]
+        self.cells = [
+            PoissonNeuron(
+                self.tau,
+                self.meanSpikesPerSecond,
+                self.name +
+                "." +
+                self.cellParameters["type"] +
+                "." +
+                str(i),
+                parentPop=self) for i in range(popCount)]
 
         # Prepare for connections
         self.outboundAxons = []
@@ -26,5 +44,5 @@ class PoissonPopulation(Population):
 
         # Outbound connections will be created later via a call to addOutboundConnections(), even if they are entirely internal to this population.
         # Inbound connections will call registerInboundConnection() as they are created, either via this population or via another.
-        # Note: We handle internal connections as just outbound from and inbound to the same population
-
+        # Note: We handle internal connections as just outbound from and
+        # inbound to the same population
