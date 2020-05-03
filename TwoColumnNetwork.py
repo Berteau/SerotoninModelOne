@@ -7,7 +7,9 @@ from SomaticSerotoninReceptorFactory import *
 from random import random, gauss
 import functools
 
-# TODO: change imports to a "import <file>" format, then call them with <file>.<class>
+# TODO: change imports to a "import <file>" format, then call them with
+# <file>.<class>
+
 
 class TwoColumnNetwork(Network):
     def __init__(self, tau, parentSimulation, params, name):
@@ -81,11 +83,16 @@ class TwoColumnNetwork(Network):
         lambdaBParams["type"] = "Poisson"
 
         # Define defuse receptor factories
-        factorySomatic5HT2A = SomaticSerotoninDiffuseReceptorFactory("5HT2A", lambda x: self.somaticSerotonin2AReceptorWeight, [])
-        factorySomatic5HT2ALTS = SomaticSerotoninDiffuseReceptorFactory("5HT2A", lambda x: params["Somatic5HT2AWeightLTS"], [])
-        factorySomatic5HT1A = SomaticSerotoninDiffuseReceptorFactory("5HT1A", lambda x: self.somaticSerotonin1AReceptorWeight, [])
-        factoryAxonal5HT2A = AxonalSerotoninDiffuseReceptorFactory("5HT2A", lambda x: self.axonalSerotonin2AReceptorWeight, [])
-        factoryAxonal5HT1A = AxonalSerotoninDiffuseReceptorFactory("5HT1A", lambda x: self.axonalSerotonin1AReceptorWeight, [])
+        factorySomatic5HT2A = SomaticSerotoninDiffuseReceptorFactory(
+            "5HT2A", lambda x: self.somaticSerotonin2AReceptorWeight, [])
+        factorySomatic5HT2ALTS = SomaticSerotoninDiffuseReceptorFactory(
+            "5HT2A", lambda x: params["Somatic5HT2AWeightLTS"], [])
+        factorySomatic5HT1A = SomaticSerotoninDiffuseReceptorFactory(
+            "5HT1A", lambda x: self.somaticSerotonin1AReceptorWeight, [])
+        factoryAxonal5HT2A = AxonalSerotoninDiffuseReceptorFactory(
+            "5HT2A", lambda x: self.axonalSerotonin2AReceptorWeight, [])
+        factoryAxonal5HT1A = AxonalSerotoninDiffuseReceptorFactory(
+            "5HT1A", lambda x: self.axonalSerotonin1AReceptorWeight, [])
 
         # Define diffuse Transmitters for Area A
         transmittersA = {}
@@ -98,55 +105,128 @@ class TwoColumnNetwork(Network):
         transmittersB["5HT1A"] = self.serotoninLevelB
 
         # Build the populations
-        self.populations["InputA"] = PoissonPopulation(tau, lambdaAParams, self.popCount, [], transmittersA, self, name)
-        self.populations["InputB"] = PoissonPopulation(tau, lambdaBParams, self.popCount, [], transmittersB, self, name)
+        self.populations["InputA"] = PoissonPopulation(
+            tau, lambdaAParams, self.popCount, [], transmittersA, self, name)
+        self.populations["InputB"] = PoissonPopulation(
+            tau, lambdaBParams, self.popCount, [], transmittersB, self, name)
 
         # [factorySomatic5HT2A, factorySomatic5HT1A]
-        self.populations["pyramidalsA"] = Population(self.tau, pyramidalParams, self.popCount, [factorySomatic5HT2A, factorySomatic5HT1A], transmittersA, self, "Area A Pyramidal Cells")
-        self.populations["fastSpikingsA"] = Population(self.tau, fsParams, self.popCount, [], transmittersA, self, "Area A Fast Spiking Cells")
-        self.populations["lowThresholdsA"] = Population(self.tau, ltsParams, self.popCount, [factorySomatic5HT2ALTS, factorySomatic5HT1A], transmittersA, self, "Area A Low Threshold Cells")
+        self.populations["pyramidalsA"] = Population(
+            self.tau, pyramidalParams, self.popCount, [
+                factorySomatic5HT2A, factorySomatic5HT1A], transmittersA, self, "Area A Pyramidal Cells")
+        self.populations["fastSpikingsA"] = Population(
+            self.tau,
+            fsParams,
+            self.popCount,
+            [],
+            transmittersA,
+            self,
+            "Area A Fast Spiking Cells")
+        self.populations["lowThresholdsA"] = Population(
+            self.tau, ltsParams, self.popCount, [
+                factorySomatic5HT2ALTS, factorySomatic5HT1A], transmittersA, self, "Area A Low Threshold Cells")
 
-        self.populations["pyramidalsB"] = Population(self.tau, pyramidalParams, self.popCount, [factorySomatic5HT2A, factorySomatic5HT1A], transmittersB, self, "Area B Pyramidal Cells")
-        self.populations["fastSpikingsB"] = Population(self.tau, fsParams, self.popCount, [], transmittersA, self, "Area B Fast Spiking Cells")
-        self.populations["lowThresholdsB"] = Population(self.tau, ltsParams, self.popCount, [factorySomatic5HT2ALTS, factorySomatic5HT1A], transmittersB, self, "Area B Low Threshold Cells")
+        self.populations["pyramidalsB"] = Population(
+            self.tau, pyramidalParams, self.popCount, [
+                factorySomatic5HT2A, factorySomatic5HT1A], transmittersB, self, "Area B Pyramidal Cells")
+        self.populations["fastSpikingsB"] = Population(
+            self.tau,
+            fsParams,
+            self.popCount,
+            [],
+            transmittersA,
+            self,
+            "Area B Fast Spiking Cells")
+        self.populations["lowThresholdsB"] = Population(
+            self.tau, ltsParams, self.popCount, [
+                factorySomatic5HT2ALTS, factorySomatic5HT1A], transmittersB, self, "Area B Low Threshold Cells")
 
         # Build connections
 
         # First, unimodal input
-        self.populations["InputA"].addOutboundConnections(self.populations["pyramidalsA"], self.gaussWeightWithChanceFactory(self.inputWeightA, 1.0), [factoryAxonal5HT2A], [factoryAxonal5HT2A])
-        self.populations["InputB"].addOutboundConnections(self.populations["pyramidalsB"], self.gaussWeightWithChanceFactory(self.inputWeightB, 1.0), [factoryAxonal5HT2A], [factoryAxonal5HT2A])
+        self.populations["InputA"].addOutboundConnections(
+            self.populations["pyramidalsA"], self.gaussWeightWithChanceFactory(
+                self.inputWeightA, 1.0), [factoryAxonal5HT2A], [factoryAxonal5HT2A])
+        self.populations["InputB"].addOutboundConnections(
+            self.populations["pyramidalsB"], self.gaussWeightWithChanceFactory(
+                self.inputWeightB, 1.0), [factoryAxonal5HT2A], [factoryAxonal5HT2A])
 
         # Then cross-modal input
-        self.populations["InputA"].addOutboundConnections(self.populations["pyramidalsB"], self.gaussWeightWithChanceFactory(self.params["inputWeightAB"], self.params["crossModalABLikelihood"]), [], [factoryAxonal5HT2A])
-        self.populations["InputB"].addOutboundConnections(self.populations["pyramidalsA"], self.gaussWeightWithChanceFactory(self.params["inputWeightBA"], self.params["crossModalBALikelihood"]), [], [factoryAxonal5HT2A])
+        self.populations["InputA"].addOutboundConnections(
+            self.populations["pyramidalsB"],
+            self.gaussWeightWithChanceFactory(
+                self.params["inputWeightAB"],
+                self.params["crossModalABLikelihood"]),
+            [],
+            [factoryAxonal5HT2A])
+        self.populations["InputB"].addOutboundConnections(
+            self.populations["pyramidalsA"],
+            self.gaussWeightWithChanceFactory(
+                self.params["inputWeightBA"],
+                self.params["crossModalBALikelihood"]),
+            [],
+            [factoryAxonal5HT2A])
 
         # Now we do connections that run within each column
 
         # Pyramidal self-excitation
-        self.populations["pyramidalsA"].addOutboundConnections(self.populations["pyramidalsA"], self.selfTargetingGaussWeightFactory(self.params["pyramidalSelfExcitationWeight"]), [], [])
-        self.populations["pyramidalsA"].addOutboundConnections(self.populations["pyramidalsA"], self.gaussWeightWithChanceFactory(self.params["pyramidalToPyramidalWeight"], self.params["pyramidalToPyramidalLikelihood"]))
-        self.populations["pyramidalsB"].addOutboundConnections(self.populations["pyramidalsB"], self.selfTargetingGaussWeightFactory(self.params["pyramidalSelfExcitationWeight"]), [], [])
-        self.populations["pyramidalsB"].addOutboundConnections(self.populations["pyramidalsB"], self.gaussWeightWithChanceFactory(self.params["pyramidalToPyramidalWeight"], self.params["pyramidalToPyramidalLikelihood"]))
+        self.populations["pyramidalsA"].addOutboundConnections(
+            self.populations["pyramidalsA"], self.selfTargetingGaussWeightFactory(
+                self.params["pyramidalSelfExcitationWeight"]), [], [])
+        self.populations["pyramidalsA"].addOutboundConnections(
+            self.populations["pyramidalsA"],
+            self.gaussWeightWithChanceFactory(
+                self.params["pyramidalToPyramidalWeight"],
+                self.params["pyramidalToPyramidalLikelihood"]))
+        self.populations["pyramidalsB"].addOutboundConnections(
+            self.populations["pyramidalsB"], self.selfTargetingGaussWeightFactory(
+                self.params["pyramidalSelfExcitationWeight"]), [], [])
+        self.populations["pyramidalsB"].addOutboundConnections(
+            self.populations["pyramidalsB"],
+            self.gaussWeightWithChanceFactory(
+                self.params["pyramidalToPyramidalWeight"],
+                self.params["pyramidalToPyramidalLikelihood"]))
 
         # Now Pyramidal to Fast-Spiking
-        self.populations["pyramidalsA"].addOutboundConnections(self.populations["fastSpikingsA"], self.gaussWeightWithChanceFactory(self.params["PyramidalsToFSWeight"], 1.0), [], [])
-        self.populations["pyramidalsB"].addOutboundConnections(self.populations["fastSpikingsB"], self.gaussWeightWithChanceFactory(self.params["PyramidalsToFSWeight"], 1.0), [], [])
+        self.populations["pyramidalsA"].addOutboundConnections(
+            self.populations["fastSpikingsA"], self.gaussWeightWithChanceFactory(
+                self.params["PyramidalsToFSWeight"], 1.0), [], [])
+        self.populations["pyramidalsB"].addOutboundConnections(
+            self.populations["fastSpikingsB"], self.gaussWeightWithChanceFactory(
+                self.params["PyramidalsToFSWeight"], 1.0), [], [])
 
         # Fast Spiking to Pyramidal
-        self.populations["fastSpikingsA"].addOutboundConnections(self.populations["pyramidalsA"], self.gaussWeightWithChanceFactory(self.params["FSToPyramidalsWeight"], 1.0), [], [])
-        self.populations["fastSpikingsB"].addOutboundConnections(self.populations["pyramidalsB"], self.gaussWeightWithChanceFactory(self.params["FSToPyramidalsWeight"], 1.0), [], [])
+        self.populations["fastSpikingsA"].addOutboundConnections(
+            self.populations["pyramidalsA"], self.gaussWeightWithChanceFactory(
+                self.params["FSToPyramidalsWeight"], 1.0), [], [])
+        self.populations["fastSpikingsB"].addOutboundConnections(
+            self.populations["pyramidalsB"], self.gaussWeightWithChanceFactory(
+                self.params["FSToPyramidalsWeight"], 1.0), [], [])
 
         # Pyramidal to Low-Threshold
-        self.populations["pyramidalsA"].addOutboundConnections(self.populations["lowThresholdsA"], self.gaussWeightWithChanceFactory(self.params["PyramidalsToLTSWeight"], 1.0), [], [])
-        self.populations["pyramidalsB"].addOutboundConnections(self.populations["lowThresholdsB"], self.gaussWeightWithChanceFactory(self.params["PyramidalsToLTSWeight"], 1.0), [], [])
+        self.populations["pyramidalsA"].addOutboundConnections(
+            self.populations["lowThresholdsA"], self.gaussWeightWithChanceFactory(
+                self.params["PyramidalsToLTSWeight"], 1.0), [], [])
+        self.populations["pyramidalsB"].addOutboundConnections(
+            self.populations["lowThresholdsB"], self.gaussWeightWithChanceFactory(
+                self.params["PyramidalsToLTSWeight"], 1.0), [], [])
 
         # Now Cross-Modal LTS Connections
-        self.populations["lowThresholdsA"].addOutboundConnections(self.populations["fastSpikingsB"], self.gaussWeightWithChanceFactory(self.params["LTStoFSWeight"], 1.0), [], [])
-        self.populations["lowThresholdsA"].addOutboundConnections(self.populations["pyramidalsB"], self.gaussWeightWithChanceFactory(self.params["LTStoPyramidalsWeight"], 1.0), [], [])
-        self.populations["lowThresholdsB"].addOutboundConnections(self.populations["fastSpikingsA"], self.gaussWeightWithChanceFactory(self.params["LTStoFSWeight"], 1.0), [], [])
-        self.populations["lowThresholdsB"].addOutboundConnections(self.populations["pyramidalsA"], self.gaussWeightWithChanceFactory(self.params["LTStoPyramidalsWeight"], 1.0), [], [])
+        self.populations["lowThresholdsA"].addOutboundConnections(
+            self.populations["fastSpikingsB"], self.gaussWeightWithChanceFactory(
+                self.params["LTStoFSWeight"], 1.0), [], [])
+        self.populations["lowThresholdsA"].addOutboundConnections(
+            self.populations["pyramidalsB"], self.gaussWeightWithChanceFactory(
+                self.params["LTStoPyramidalsWeight"], 1.0), [], [])
+        self.populations["lowThresholdsB"].addOutboundConnections(
+            self.populations["fastSpikingsA"], self.gaussWeightWithChanceFactory(
+                self.params["LTStoFSWeight"], 1.0), [], [])
+        self.populations["lowThresholdsB"].addOutboundConnections(
+            self.populations["pyramidalsA"], self.gaussWeightWithChanceFactory(
+                self.params["LTStoPyramidalsWeight"], 1.0), [], [])
 
-    # TODO: Separate out connection function factories to another library file somewhere
+    # TODO: Separate out connection function factories to another library file
+    # somewhere
 
     def setSerotoninA(self, transmittersA):
         aKeys = ["pyramidalsA", "fastSpikingsA", "lowThresholdsA"]
@@ -169,7 +249,9 @@ class TwoColumnNetwork(Network):
     def gaussWeightWithChanceFactory(self, inputWeight, chance):
         def weightFunction(source, target):
             if random() < chance:
-                return gauss(inputWeight / self.popCount, ((inputWeight / self.popCount) / 10))
+                return gauss(
+                    inputWeight / self.popCount,
+                    ((inputWeight / self.popCount) / 10))
             else:
                 return None
         return weightFunction
@@ -177,7 +259,9 @@ class TwoColumnNetwork(Network):
     def selfTargetingGaussWeightFactory(self, inputWeight):
         def weightFunction(source, target):
             if source is target:
-                return gauss(inputWeight / self.popCount, ((inputWeight / self.popCount) / 10))
+                return gauss(
+                    inputWeight / self.popCount,
+                    ((inputWeight / self.popCount) / 10))
             else:
                 return None
         return weightFunction
