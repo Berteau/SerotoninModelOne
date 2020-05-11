@@ -12,6 +12,7 @@ from matplotlib.pyplot import subplot
 from matplotlib.pyplot import title 
 from numpy import arange
 from numpy import zeros
+from tqdm import tqdm
 
 from network.TwoColumnNetwork import TwoColumnNetwork
 
@@ -46,9 +47,7 @@ class TwoColumnSimulation():
         start = maxTime * (phase - 1)
         end = maxTime * phase
         tspan = arange(start, end, tau)
-        for t in tspan:
-            if t % FLAGS.steps_between_timing_debug == 0:
-                logging.debug("Phase 1 step: %d" % t)
+        for t in tqdm(tspan, desc=("phase %d" % phase)):
             self.network.step()
 
     def phase1(self):
