@@ -1,5 +1,5 @@
 # Use a google cloud sdk base image which has gsutil and python3
-FROM gcr.io/google.com/cloudsdktool/cloud-sdk:alpine
+FROM gcr.io/google.com/cloudsdktool/cloud-sdk:slim
 
 WORKDIR /usr/lib/serotonin
 

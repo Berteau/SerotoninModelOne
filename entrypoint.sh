@@ -2,16 +2,13 @@
 
 # Required environment variables:
 #
-# BUILD_ID: the hashed parameters details corresponding to a flags file in ./flags/flags.${BUILD_ID}
+# PARAMS: the hashed parameters details corresponding to a flags file in ./flags/flags.${BUILD_ID}
 # SERVICE_AGENT_PASSPHRASE: the passphrase to use at runtime to decrypt the service agent credentials.
 #    Request access at https://docs.google.com/document/d/1s-9nAPxLcYlVT9nviQrpx6WRAAiyCeccosvBDe0O-RQ
 
-echo "Using build id ${BUILD_ID}"
+echo "Using build id ${PARAMS}"
 
 FLAGFILE=./flags/flags.${BUILD_ID}
-
-#cat "${FLAGFILE}"
-echo
 
 python3 ./app.py --mode=PLOT --flagfile="$FLAGFILE"
 

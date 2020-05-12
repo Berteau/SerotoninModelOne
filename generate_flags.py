@@ -12,6 +12,19 @@ import os
 import sys
 
 
+"""
+Ranges are iterated over to generate the appropriate flags files. All unique
+combinations will be generated. See `flagfile`, `flagfile.template`, and
+`params.py` for flags that are available. Edit this block when starting a new
+swarm run.
+"""
+RANGES = {
+    "maxTime": range(100, 200, 50),
+    "tau": arange(.1, 1, .3),
+    "popCount": range(10, 50, 10),
+}
+
+
 sys.setrecursionlimit(1000)
 FLAGS = flags.FLAGS
 
@@ -73,13 +86,7 @@ def main(argv):
 
     default_params = loadParams()
 
-    ranges = {
-        "maxTime": range(100, 200, 50),
-        "tau": arange(.1, 1, .3),
-        "popCount": range(10, 50, 10),
-    }
-
-    for matrix_params in build_table_matrix(ranges):
+    for matrix_params in build_table_matrix(RANGES):
         build_id = encode_params(matrix_params)
         write_template(template, build_id, default_params, matrix_params)
 

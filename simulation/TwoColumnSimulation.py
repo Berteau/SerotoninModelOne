@@ -32,7 +32,7 @@ def get_build_id():
 
 flags.DEFINE_string("figures_directory", get_default_figures_directory(), "Directory relative to the running directory to save figures.")
 flags.DEFINE_integer("steps_between_timing_debug", 10, "Number of steps to log progress after")
-flags.DEFINE_string("build_id", "unknown_build", "Hash or unique ID of the running BUILD for ")
+flags.DEFINE_string("build_id", "local_build", "Hash or unique ID of the running BUILD for ")
 
 
 class TwoColumnSimulation():
