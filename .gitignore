@@ -10,4 +10,5 @@ envfile
 figures
 flags
 google-cloud-sdk
+kubectl
 tmp
