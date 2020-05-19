@@ -11,11 +11,12 @@ echo "Uploading to ${BUCKET}"
 
 FLAGFILE="./flags/flags.${BUILD_ID}"
 SERVICE_AGENT_FILE="${SERVICE_AGENT_FILE:-service_agent.json.gpg}"
-SERVICE_AGENT_KEY="${SERVICE_AGENT_KEY:-sercvice_agent.json}"
+SERVICE_AGENT_KEY="${SERVICE_AGENT_KEY:-service_agent.json}"
 
 python3 ./app.py --mode=PLOT --flagfile="$FLAGFILE"
 
 if [ ! -f "$SERVICE_AGENT_KEY" ] ; then
+    echo "Service agent key $SERVICE_AGENT_KEY not found, decrypting $SERVICE_AGENT_FILE"
     gpg --decrypt \
         --batch \
         --passphrase="${SERVICE_AGENT_PASSPHRASE}" \

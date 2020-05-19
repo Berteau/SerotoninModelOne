@@ -1,4 +1,6 @@
-#!/bin/sh
+#!/bin/bash
+
+shopt -s expand_aliases
 
 # Check for global gcloud, or download and install locally.
 # https://cloud.google.com/sdk/docs/downloads-versioned-archives
@@ -6,7 +8,7 @@ CLOUD_SDK=https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-clou
 if [[ ! -x gcloud ]] ; then
     if [[ ! -d ./google-cloud-sdk ]] ; then
         echo "No gcloud available, fetching locally"
-        curl --silent "$CLOUD_SDK" | tar x
+        curl --silent "$CLOUD_SDK" | tar xz
     fi
     echo "Using local gcloud"
     alias gcloud=./google-cloud-sdk/bin/gcloud
