@@ -37,16 +37,19 @@ BUCKET="${BUCKET:-serotoninmodel}"
 # Ensure a SERVICE_AGENT_PASSPHRASE is available when running this.
 # If you're running in the project serotonin-model, look in the
 # serotoninmodel_config bucket for the keyfile and passphrase.
-SERVICE_AGENT_FILE="${SERVICE_AGENT_FILE:-serotoninmodel_agent.json.gpg}"
+SERVICE_AGENT_KEY="${SERVICE_AGENT_FILE:-service_agent.json}"
+SERVICE_AGENT_FILE="${SERVICE_AGENT_FILE:-service_agent.json.gpg}"
 #SERVICE_AGENT_PASSPHRASE="${SERVICE_AGENT_PASSPHRASE:-this is the wrong secret}"
-if [[ ! -f "$SERVICE_AGENT_FILE" ]] ; then
-    echo "Missing SERVICE_AGENT_FILE"
-    exit 1
+if [[ ! -f "$SERVICE_AGENT_KEY" ]] ; then
+    if [[ ! -f "$SERVICE_AGENT_FILE" ]] ; then
+        echo "Missing SERVICE_AGENT_FILE"
+        exit 1
+    fi
+    if [ -z "$SERVICE_AGENT_PASSPHRASE" ] ; then
+        echo "Missing SERVICE_AGENT_PASSPHRASE"
+        exit 1
+    fi 
 fi
-if [ -z "$SERVICE_AGENT_PASSPHRASE" ] ; then
-    echo "Missing SERVICE_AGENT_PASSPHRASE"
-    exit 1
-fi 
 
 # Memory per image. Empirically determined from watching prior runs.
 # Scales linearly on population count and number of steps (time / tau).

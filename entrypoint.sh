@@ -9,14 +9,23 @@
 echo "Using build id ${BUILD_ID}"
 echo "Uploading to ${BUCKET}"
 
-FLAGFILE=./flags/flags.${BUILD_ID}
+FLAGFILE="./flags/flags.${BUILD_ID}"
+SERVICE_AGENT_FILE="${SERVICE_AGENT_FILE:-service_agent.json.gpg}"
+SERVICE_AGENT_KEY="${SERVICE_AGENT_KEY:-sercvice_agent.json}"
 
 python3 ./app.py --mode=PLOT --flagfile="$FLAGFILE"
 
-gpg --decrypt \
-    --batch \
-    --passphrase="${SERVICE_AGENT_PASSPHRASE}" \
-    "${SERVICE_AGENT_FILE:-service_agent.json.gpg}" \
-    > service_agent.json
-gcloud auth activate-service-account --key-file=service_agent.json
-gsutil -m cp -r figures/* gs://${BUCKET}
+if [[ -f "$SERVICE_AGENT_FILE" && ! -f "$SERVICE_AGENT_KEY" ]] ; then
+    gpg --decrypt \
+        --batch \
+        --passphrase="${SERVICE_AGENT_PASSPHRASE}" \
+        "$SERVICE_AGENT_FILE" \
+        > "$SERVICE_AGENT_KEY"
+fi
+
+if [[ ! -f "$SERVICE_AGENT_KEY" ]] ; then
+    echo "Missing service agent key $SERVICE_AGENT_KEY, cannot store results"
+else
+    gcloud auth activate-service-account --key-file="$SERVICE_AGENT_KEY"
+    gsutil -m cp -r figures/* gs://${BUCKET}
+fi
