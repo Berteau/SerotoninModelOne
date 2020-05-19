@@ -15,7 +15,7 @@ SERVICE_AGENT_KEY="${SERVICE_AGENT_KEY:-sercvice_agent.json}"
 
 python3 ./app.py --mode=PLOT --flagfile="$FLAGFILE"
 
-if [[ -f "$SERVICE_AGENT_FILE" && ! -f "$SERVICE_AGENT_KEY" ]] ; then
+if [ ! -f "$SERVICE_AGENT_KEY" ] ; then
     gpg --decrypt \
         --batch \
         --passphrase="${SERVICE_AGENT_PASSPHRASE}" \
@@ -23,7 +23,7 @@ if [[ -f "$SERVICE_AGENT_FILE" && ! -f "$SERVICE_AGENT_KEY" ]] ; then
         > "$SERVICE_AGENT_KEY"
 fi
 
-if [[ ! -f "$SERVICE_AGENT_KEY" ]] ; then
+if [ ! -f "$SERVICE_AGENT_KEY" ] ; then
     echo "Missing service agent key $SERVICE_AGENT_KEY, cannot store results"
 else
     gcloud auth activate-service-account --key-file="$SERVICE_AGENT_KEY"
