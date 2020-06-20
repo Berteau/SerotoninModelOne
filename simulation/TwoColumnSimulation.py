@@ -13,6 +13,7 @@ from matplotlib.pyplot import title
 from numpy import arange
 from numpy import zeros
 from tqdm import tqdm
+from scipy import signal
 
 from network.TwoColumnNetwork import TwoColumnNetwork
 
@@ -33,7 +34,6 @@ def get_build_id():
 flags.DEFINE_string("figures_directory", get_default_figures_directory(), "Directory relative to the running directory to save figures.")
 flags.DEFINE_integer("steps_between_timing_debug", 10, "Number of steps to log progress after")
 flags.DEFINE_string("build_id", "local_build", "Hash or unique ID of the running BUILD for ")
-
 
 class TwoColumnSimulation():
     def __init__(self, params):
@@ -57,7 +57,7 @@ class TwoColumnSimulation():
     def phase2(self):
         logging.info("Phase Two, sensory deprivation")
         for inputCell in self.network.populations["InputA"].cells:
-            inputCell.poissonLambda = 0
+            inputCell.maxLambdaConst = 0
         self.runPhase(2)
 
     def phase3(self):
@@ -82,7 +82,7 @@ class TwoColumnSimulation():
                 for source in self.network.populations["InputB"].cells[x].outputs:
                     if source.target == self.network.populations["pyramidalsA"].cells[y]:
                         source.postSynapticReceptors[0].plasticity = True
-                        source.postSynapticReceptors[0].c_p = 180.3
+                        source.postSynapticReceptors[0].c_p = 90 #180.3
 
         self.runPhase(3)
 
@@ -103,8 +103,8 @@ class TwoColumnSimulation():
                         source.postSynapticReceptors[0].plasticity = False
 
         transmittersA = {}
-        transmittersA["5HT2A"] = 40
-        transmittersA["5HT1A"] = 40
+        transmittersA["5HT2A"] = 10
+        transmittersA["5HT1A"] = 10
         self.network.setSerotoninA(transmittersA)
         self.runPhase(4)
 
@@ -113,7 +113,6 @@ class TwoColumnSimulation():
         self.phase2()
         self.phase3()
         self.phase4()
-
 
 class TwoColumnSimulationPlotter():
     def __init__(self, twoColumnSimulation):
@@ -146,7 +145,7 @@ class TwoColumnSimulationPlotter():
         pcolor(self.twoColumnSimulation.weightMatrixPriorBA)
         colorbar()
         title('Prior Weights from Input B to Pyramidals A')
-        self.savefig('phase_three_anterior_weights.png')
+        self.savefig('phase_three_anterior_weights_testName.png')
 
         figure()
         pcolor(self.twoColumnSimulation.weightMatrixPostBA)
@@ -203,59 +202,90 @@ class TwoColumnSimulationPlotter():
 
         self.savefig('column_b_spike_rates.png')
 
+        # figure()
+        # subplot(4, 1, 1)
+        # pcolor(inputAVoltages, vmin=-100, vmax=60)
+        # colorbar()
+        # title('A Input')
+
+        # subplot(4, 1, 2)
+        # pcolor(aPyramidalVoltages, vmin=-100, vmax=60)
+        # colorbar()
+        # title('A Pyramidal Cells')
+
+        # subplot(4, 1, 3)
+        # pcolor(aFSVoltages, vmin=-100, vmax=60)
+        # colorbar()
+        # title('A FS Cells')
+
+        # subplot(4, 1, 4)
+        # pcolor(aLTSVoltages, vmin=-100, vmax=60)
+        # colorbar()
+        # title('A LTS Cells')
+
+        # self.savefig('column_a_voltages.png')
+
+        # figure()
+        # subplot(4, 1, 1)
+        # pcolor(inputBVoltages, vmin=-100, vmax=60)
+        # colorbar()
+        # title('B Input')
+
+        # subplot(4, 1, 2)
+        # pcolor(bPyramidalVoltages, vmin=-100, vmax=60)
+        # colorbar()
+        # title('B Pyramidal Cells')
+
+        # subplot(4, 1, 3)
+        # pcolor(bFSVoltages, vmin=-100, vmax=60)
+        # colorbar()
+        # title('B FS Cells')
+
+        # subplot(4, 1, 4)
+        # pcolor(bLTSVoltages, vmin=-100, vmax=60)
+        # colorbar()
+        # title('B LTS Cells')
+        # self.savefig('column_b_voltages.png')
+
+        # numax = len(self.network.populations["InputB"].outboundAxons)
+        # timeSpan = len(self.network.populations["InputB"].rateRecord)
+        # baSpikeFailures = zeros((numax, timeSpan))
+        # axNum = 0
+        # for ax in self.network.populations["InputB"].outboundAxons:
+        #     baSpikeFailures[axNum, :] = ax.spikeFailures
+        #     axNum += 1
+
+        # figure()
+        # pcolor(baSpikeFailures, cmap="Greys")
+        # self.savefig('ba_spike_failures.png')
+
+        aaInfluence = self.network.populations["InputA"].influenceRecord[self.network.populations["pyramidalsA"]]
+        baInfluence = self.network.populations["InputB"].influenceRecord[self.network.populations["pyramidalsA"]]
+        aSelfInfluence = self.network.populations["pyramidalsA"].influenceRecord[self.network.populations["pyramidalsA"]]
+        fsAInfluence = self.network.populations["fastSpikingsA"].influenceRecord[self.network.populations["pyramidalsA"]]
+        bltsAInfluence = self.network.populations["lowThresholdsB"].influenceRecord[self.network.populations["pyramidalsA"]]
+
         figure()
-        subplot(4, 1, 1)
-        pcolor(inputAVoltages, vmin=-100, vmax=60)
-        colorbar()
-        title('A Input')
+        subplot(5, 1, 1)
+        plot(aaInfluence)
+        title('Input A influence on Pyramidal Population A')
 
-        subplot(4, 1, 2)
-        pcolor(aPyramidalVoltages, vmin=-100, vmax=60)
-        colorbar()
-        title('A Pyramidal Cells')
+        subplot(5, 1, 2)
+        plot(baInfluence)
+        title('Input B influence on Pyramidal Population A')
 
-        subplot(4, 1, 3)
-        pcolor(aFSVoltages, vmin=-100, vmax=60)
-        colorbar()
-        title('A FS Cells')
+        subplot(5, 1, 3)
+        plot(aSelfInfluence)
+        title('Pyramidal Population A self-influence (auto-excitation and population-level feedback)')
 
-        subplot(4, 1, 4)
-        pcolor(aLTSVoltages, vmin=-100, vmax=60)
-        colorbar()
-        title('A LTS Cells')
+        subplot(5, 1, 4)
+        plot(fsAInfluence)
+        title('Fast Spiking A influence on Pyramidal Population A')
 
-        self.savefig('column_a_voltages.png')
+        subplot(5, 1, 5)
+        plot(bltsAInfluence)
+        title('Low Threshold B influence on Pyramidal Population A')
 
-        figure()
-        subplot(4, 1, 1)
-        pcolor(inputBVoltages, vmin=-100, vmax=60)
-        colorbar()
-        title('B Input')
+        self.savefig('influences_on_pyramidal_A.png')
 
-        subplot(4, 1, 2)
-        pcolor(bPyramidalVoltages, vmin=-100, vmax=60)
-        colorbar()
-        title('B Pyramidal Cells')
 
-        subplot(4, 1, 3)
-        pcolor(bFSVoltages, vmin=-100, vmax=60)
-        colorbar()
-        title('B FS Cells')
-
-        subplot(4, 1, 4)
-        pcolor(bLTSVoltages, vmin=-100, vmax=60)
-        colorbar()
-        title('B LTS Cells')
-        self.savefig('column_b_voltages.png')
-
-        numax = len(self.network.populations["InputB"].outboundAxons)
-        timeSpan = len(self.network.populations["InputB"].rateRecord)
-        baSpikeFailures = zeros((numax, timeSpan))
-        axNum = 0
-        for ax in self.network.populations["InputB"].outboundAxons:
-            baSpikeFailures[axNum, :] = ax.spikeFailures
-            axNum += 1
-
-        figure()
-        pcolor(baSpikeFailures, cmap="Greys")
-        self.savefig('ba_spike_failures.png')
