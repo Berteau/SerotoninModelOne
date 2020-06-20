@@ -202,62 +202,62 @@ class TwoColumnSimulationPlotter():
 
         self.savefig('column_b_spike_rates.png')
 
-        # figure()
-        # subplot(4, 1, 1)
-        # pcolor(inputAVoltages, vmin=-100, vmax=60)
-        # colorbar()
-        # title('A Input')
+        figure()
+        subplot(4, 1, 1)
+        pcolor(inputAVoltages, vmin=-100, vmax=60)
+        colorbar()
+        title('A Input')
 
-        # subplot(4, 1, 2)
-        # pcolor(aPyramidalVoltages, vmin=-100, vmax=60)
-        # colorbar()
-        # title('A Pyramidal Cells')
+        subplot(4, 1, 2)
+        pcolor(aPyramidalVoltages, vmin=-100, vmax=60)
+        colorbar()
+        title('A Pyramidal Cells')
 
-        # subplot(4, 1, 3)
-        # pcolor(aFSVoltages, vmin=-100, vmax=60)
-        # colorbar()
-        # title('A FS Cells')
+        subplot(4, 1, 3)
+        pcolor(aFSVoltages, vmin=-100, vmax=60)
+        colorbar()
+        title('A FS Cells')
 
-        # subplot(4, 1, 4)
-        # pcolor(aLTSVoltages, vmin=-100, vmax=60)
-        # colorbar()
-        # title('A LTS Cells')
+        subplot(4, 1, 4)
+        pcolor(aLTSVoltages, vmin=-100, vmax=60)
+        colorbar()
+        title('A LTS Cells')
 
-        # self.savefig('column_a_voltages.png')
+        self.savefig('column_a_voltages.png')
 
-        # figure()
-        # subplot(4, 1, 1)
-        # pcolor(inputBVoltages, vmin=-100, vmax=60)
-        # colorbar()
-        # title('B Input')
+        figure()
+        subplot(4, 1, 1)
+        pcolor(inputBVoltages, vmin=-100, vmax=60)
+        colorbar()
+        title('B Input')
 
-        # subplot(4, 1, 2)
-        # pcolor(bPyramidalVoltages, vmin=-100, vmax=60)
-        # colorbar()
-        # title('B Pyramidal Cells')
+        subplot(4, 1, 2)
+        pcolor(bPyramidalVoltages, vmin=-100, vmax=60)
+        colorbar()
+        title('B Pyramidal Cells')
 
-        # subplot(4, 1, 3)
-        # pcolor(bFSVoltages, vmin=-100, vmax=60)
-        # colorbar()
-        # title('B FS Cells')
+        subplot(4, 1, 3)
+        pcolor(bFSVoltages, vmin=-100, vmax=60)
+        colorbar()
+        title('B FS Cells')
 
-        # subplot(4, 1, 4)
-        # pcolor(bLTSVoltages, vmin=-100, vmax=60)
-        # colorbar()
-        # title('B LTS Cells')
-        # self.savefig('column_b_voltages.png')
+        subplot(4, 1, 4)
+        pcolor(bLTSVoltages, vmin=-100, vmax=60)
+        colorbar()
+        title('B LTS Cells')
+        self.savefig('column_b_voltages.png')
 
-        # numax = len(self.network.populations["InputB"].outboundAxons)
-        # timeSpan = len(self.network.populations["InputB"].rateRecord)
-        # baSpikeFailures = zeros((numax, timeSpan))
-        # axNum = 0
-        # for ax in self.network.populations["InputB"].outboundAxons:
-        #     baSpikeFailures[axNum, :] = ax.spikeFailures
-        #     axNum += 1
+        numax = len(self.network.populations["InputB"].outboundAxons)
+        timeSpan = len(self.network.populations["InputB"].rateRecord)
+        baSpikeFailures = zeros((numax, timeSpan))
+        axNum = 0
+        for ax in self.network.populations["InputB"].outboundAxons:
+            baSpikeFailures[axNum, :] = ax.spikeFailures
+            axNum += 1
 
-        # figure()
-        # pcolor(baSpikeFailures, cmap="Greys")
-        # self.savefig('ba_spike_failures.png')
+        figure()
+        pcolor(baSpikeFailures, cmap="Greys")
+        self.savefig('ba_spike_failures.png')
 
         aaInfluence = self.network.populations["InputA"].influenceRecord[self.network.populations["pyramidalsA"]]
         baInfluence = self.network.populations["InputB"].influenceRecord[self.network.populations["pyramidalsA"]]
