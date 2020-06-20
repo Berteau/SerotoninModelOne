@@ -1,0 +1,35 @@
+# Outputs
+--build_id=oscillation_inputWeightA_100__inputWeightB_100
+
+# Time Parameters
+--maxTime=1000
+--tau=0.1
+
+# Population and Connection Parameters
+--popCount=20
+
+--pyramidalSelfExcitationWeight=50.0
+--pyramidalToPyramidalWeight=50.0
+--pyramidalToPyramidalLikelihood=0.3
+--PyramidalsToFSWeight=35.0
+--FSToPyramidalsWeight=-100.0
+--PyramidalsToLTSWeight=20.0
+--LTStoFSWeight=-50.0
+--LTStoPyramidalsWeight=-50.0
+--inputWeightA=100
+--inputWeightB=100
+--rateA=3.0
+--rateB=3.0
+--inputWeightAB=25.0
+--crossModalABLikelihood=0.5
+--inputWeightBA=25.0
+--crossModalBALikelihood=0.5
+
+# Diffuse Neurotransmitter Paramters
+--serotoninLevelA=10.0
+--serotoninLevelB=10.0
+--Somatic5HT2AWeight=85.0
+--Somatic5HT2AWeightLTS=81.0
+--Somatic5HT1AWeight=-80.0
+--Axonal5HT2AWeight=0.4
+--Axonal5HT1AWeight=-0.4
