@@ -14,5 +14,4 @@ RUN python3 -m pip install --no-cache-dir -r requirements.txt
 ADD . .
 ENV FIGURES_DIRECTORY=/usr/lib/serotonin/figures
 
-ENTRYPOINT "./entrypoint.sh"
-#ENTRYPOINT "./entrypointScaleTest.sh"
+ENTRYPOINT "./entrypointScaleTest.sh"

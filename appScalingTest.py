@@ -7,21 +7,21 @@ from absl import flags
 from absl import logging 
 from copy import deepcopy
 from params import loadParams
-from simulation.TwoColumnSimulation import TwoColumnSimulation
-from simulation.TwoColumnSimulation import TwoColumnSimulationPlotter
+from simulation.ScalingTestSimulation import ScalingTestSimulation
+from simulation.ScalingTestSimulation import ScalingTestSimulationPlotter
 
 sys.setrecursionlimit(10000)
 
 FLAGS = flags.FLAGS
 
 flags.DEFINE_string("mode", "PLOT", "Mode to execute. PLOT to run and plot an output, wihout saving an intermediate simulation. RUN for running the simulation & saving a pickled output, WRITE to read a pickled output and generate figures.")
-
-flags.DEFINE_string("picklejar", "two_column_simulation.pickle", "Filename to write simulation to or read simulation from.")
+flags.
+flags.DEFINE_string("picklejar", "scalingSimulation.pickle", "Filename to write simulation to or read simulation from.")
 
 def runSim():
-    logging.info("Running a new TwoColumnSimulation pass")
+    logging.info("Running a new ScalingTestSimulation pass")
     params = loadParams()
-    sim = TwoColumnSimulation(params)
+    sim = ScalingTestSimulation(params)
 
     sim.run()
 
@@ -40,7 +40,7 @@ def readSim():
 
 def plotSim(sim):
     logging.info("Generating plots for TwoColumnSimulation")
-    TwoColumnSimulationPlotter(sim).plotColumns()
+    ScalingTestSimulationPlotter(sim).plotColumns()
 
 def main(argv):
     if FLAGS.mode == "PLOT":

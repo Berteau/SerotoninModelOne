@@ -7,13 +7,13 @@
 #--phase2Length=1
 #--phase3Length=2
 #--phase4Length=2
---maxTime=10
+--maxTime=1
 --tau=0.1
 
 # Population and Connection Parameters
 --popCount=20
 
---pyramidalSelfExcitationWeight=25
+--pyramidalSelfExcitationWeight=50
 --pyramidalToPyramidalWeight=50
 --pyramidalToPyramidalLikelihood=0.3
 --PyramidalsToFSWeight=35
@@ -21,8 +21,8 @@
 --PyramidalsToLTSWeight=20
 --LTStoFSWeight=-50
 --LTStoPyramidalsWeight=-50
---inputWeightA=50
---inputWeightB=50
+--inputWeightA=400
+--inputWeightB=400
 --rateA=1
 --rateB=1
 --inputWeightAB=25

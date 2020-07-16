@@ -19,9 +19,14 @@ combinations will be generated. See `flagfile`, `flagfile.template`, and
 swarm run.
 """
 RANGES = {
-    "maxTime": range(100, 200, 50),
-    "tau": arange(.1, 1, .3),
-    "popCount": range(10, 50, 10),
+    #"maxTime": range(100, 200, 50),
+    #"tau": arange(.1, 1, .3),
+    #"popCount": range(10, 50, 5),
+    #"pyramidalSelfExcitationWeight": range(0,9,3),
+    #"pyramidalToPyramidalWeight": range(0,9,3),
+    "inputWeightA": range(80,120,20),
+    "inputWeightB": range(80,120,20)
+    #"PyramidalsToFSWeight": range(30,60,10)
 }
 
 

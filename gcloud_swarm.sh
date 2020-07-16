@@ -24,7 +24,7 @@ else
 fi
 
 # Install kubectl globally, or download a local copy (WARNING: Linux specific. Probably.).
-if [[ ! -x kubctl ]] ; then
+if [[ ! -x ./kubctl ]] ; then
     echo "kubectl not found, fetching locally"
     KUBE_STABLE="$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)"
     curl --silent -LO https://storage.googleapis.com/kubernetes-release/release/${KUBE_STABLE}/bin/linux/amd64/kubectl
@@ -41,7 +41,7 @@ BUCKET="${BUCKET:-serotoninmodel}"
 # serotoninmodel_config bucket for the keyfile and passphrase.
 SERVICE_AGENT_KEY="${SERVICE_AGENT_FILE:-service_agent.json}"
 SERVICE_AGENT_FILE="${SERVICE_AGENT_FILE:-service_agent.json.gpg}"
-#SERVICE_AGENT_PASSPHRASE="${SERVICE_AGENT_PASSPHRASE:-this is the wrong secret}"
+#SERVICE_AGENT_PASSPHRASE="${SERVICE_AGENT_PASSPHRASE:-serotoninmodel-12586}"
 if [[ ! -f "$SERVICE_AGENT_KEY" ]] ; then
     if [[ ! -f "$SERVICE_AGENT_FILE" ]] ; then
         echo "Missing SERVICE_AGENT_FILE"
@@ -57,7 +57,7 @@ fi
 # Scales linearly on population count and number of steps (time / tau).
 # Format is from Kubernete's pod requests syntax. Currently set at a
 # reasonable bound for totalTime=1000 tau=0.1 popCount=40
-MEM="512Mi"
+MEM="8Gi"
 
 # Connect kubctl to cluster
 gcloud container clusters get-credentials "${CLUSTER}" --project="${PROJECT}" --zone="$ZONE"
@@ -71,14 +71,14 @@ gcloud builds submit --tag "$IMAGE" --project="${PROJECT}"
 # Run the image for each flag
 for F in $(ls flags) ; do 
     FLAGS="${F#flags.}"
-    NAME="$(echo $FLAGS | md5)" # Have to hash flags so that the pod name isn't > 63 chars
+    NAME="$(echo $FLAGS | md5sum | cut -d ' ' -f 1)" # Have to hash flags so that the pod name isn't > 63 chars
     POD="serotonin-$TAG-$NAME"
-    kubectl run "$POD" \
+    ./kubectl run "$POD" \
         --image="$IMAGE" \
         --replicas=1 \
         --restart="Never" \
         --requests="memory=$MEM" \
-        --labels="BUILD_ID=$FLAGS" \
+        --labels="BUILD_ID=$NAME" \
         --env="BUILD_ID=$FLAGS" \
         --env="BUCKET=${BUCKET}" \
         --env="SERVICE_AGENT_FILE=${SERVICE_AGENT_FILE}" \
