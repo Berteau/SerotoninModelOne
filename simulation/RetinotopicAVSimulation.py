@@ -1,3 +1,4 @@
+import numpy as np
 from numpy import arange
 from network.RetinotopicAVNetwork import RetinotopicAVNetwork
 
@@ -58,6 +59,16 @@ class RetinotopicAVSimulation():
         self.remappingAxons = self._collectRemappingAxons()
         self.weightsPrior = None
         self.weightsPost = None
+
+        # weightHistory: (time, mean remapping-synapse weight) sampled every
+        # step across the whole run, for plotting how remapping unfolds over
+        # time rather than just the phase3 before/after snapshot.
+        self.weightHistory = []
+        # activitySnapshots: phase name -> (gridRows x gridCols) array of each
+        # visual column's most recent firing rate, for spatial "where is the
+        # activity" figures (e.g. showing the scotoma and its later refill).
+        self.activitySnapshots = {}
+        self._lastPhaseWindow = None
 
         self._lastFrameIndex = None
         self._lastAudioState = None
@@ -126,12 +137,39 @@ class RetinotopicAVSimulation():
         for t in tspan:
             self._driveInputs(t, muteVisual)
             self.network.step()
+            if self.remappingAxons:
+                meanWeight = float(np.mean([axon.postSynapticReceptors[0].weight for axon in self.remappingAxons]))
+                self.weightHistory.append((t, meanWeight))
+        self._lastPhaseWindow = (start, end)
+
+    def visualActivitySnapshot(self, windowStart, windowEnd):
+        # Mean per-cell firing rate strictly within [windowStart, windowEnd),
+        # arranged spatially - this is what shows a scotoma "going dark" and
+        # later refilling. This has to be scoped to the phase's own window
+        # (rather than reusing Population.rateRecord's fixed trailing-50ms
+        # window) because phases here are shorter than 50ms, so a trailing
+        # window would blur into the previous phase.
+        windowSize = windowEnd - windowStart
+        grid = np.zeros((self.network.gridRows, self.network.gridCols))
+        for (r, c), colName in self.network.visualColumnNames.items():
+            population = self.network.populations["pyramidals" + colName]
+            spikeCount = 0
+            for cell in population.cells:
+                for spike in reversed(cell.spikeRecord):
+                    if spike <= windowStart:
+                        break
+                    if spike < windowEnd:
+                        spikeCount += 1
+            grid[r, c] = (spikeCount / len(population.cells)) * (1000.0 / windowSize)
+        return grid
 
     def phase1(self):
         self.runPhase(1, muteVisual=False)
+        self.activitySnapshots["1_full_input"] = self.visualActivitySnapshot(*self._lastPhaseWindow)
 
     def phase2(self):
         self.runPhase(2, muteVisual=True)
+        self.activitySnapshots["2_sensory_loss"] = self.visualActivitySnapshot(*self._lastPhaseWindow)
 
     def phase3(self):
         # NOTE: axon.weight is a static snapshot fixed at construction time.
@@ -150,6 +188,7 @@ class RetinotopicAVSimulation():
         self.runPhase(3, muteVisual=True)
 
         self.weightsPost = [axon.postSynapticReceptors[0].weight for axon in self.remappingAxons]
+        self.activitySnapshots["3_serotonin_plasticity"] = self.visualActivitySnapshot(*self._lastPhaseWindow)
 
     def phase4(self):
         for axon in self.remappingAxons:
@@ -159,6 +198,7 @@ class RetinotopicAVSimulation():
         self.network.setSerotoninForColumns(self._affectedColumnNames(), baselineTransmitters)
 
         self.runPhase(4, muteVisual=True)
+        self.activitySnapshots["4_remapped"] = self.visualActivitySnapshot(*self._lastPhaseWindow)
 
     def run(self):
         self.phase1()
