@@ -5,6 +5,7 @@ import os
 # regardless of the current working directory - see TestRetinotopicAVNetwork.py.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+import random
 from datetime import datetime
 from absl import flags
 import matplotlib
@@ -26,16 +27,27 @@ from sensory.BeepAudioSource import BeepAudioSource
 from simulation.RetinotopicAVSimulation import RetinotopicAVSimulation
 
 '''
-Runs one RetinotopicAVSimulation scenario end to end and writes out:
+Runs a RetinotopicAVSimulation scenario twice - once with remapping enabled,
+once as a drift-only control with the same network/stimuli but serotonin and
+plasticity never switched on in phase3 - and writes out:
   - the video/beep input files actually used (synthetic ones are generated
     here instead of a throwaway temp dir, so they can be inspected/replayed)
   - weight_over_time.png: mean weight of the "remapping" synapses across all
-    four phases, with phase boundaries marked
+    four phases (remapping condition only - the control's weight never
+    changes by construction, since plasticity is never enabled), with phase
+    boundaries marked
   - activity_traces.png: firing rate over time for a few representative
-    columns (the lesioned site, and either a spared neighbor or the
-    cross-modal audio pathway, depending on lesion mode)
+    columns in the remapping condition (the lesioned site, and either a
+    spared neighbor or the cross-modal audio pathway, depending on lesion
+    mode)
   - activity_snapshots.png: a 1x4 spatial map of visual-grid activity at the
     end of each phase, showing the scotoma appear and then refill
+  - remapping_vs_control.png: the lesioned site's activity in both
+    conditions, overlaid. This network has enough recurrent excitation that
+    overall activity drifts upward over time even with no lesion or
+    plasticity change at all (visible within phase1 in activity_traces.png),
+    so this is the plot that actually isolates how much of the "recovery" is
+    caused by remapping specifically, versus that generic drift.
 
 Usage: python3 network/DemoRetinotopicAVNetwork.py [--lesion_mode=scotoma|full]
 '''
@@ -109,6 +121,35 @@ def plotActivitySnapshots(sim, outputDir):
     plt.close()
     return path
 
+def plotRemappingVsControl(experimentalSim, controlSim, outputDir):
+    lesionedCoord = experimentalSim.lesionedColumns[0]
+    lesionedPop = "pyramidals" + experimentalSim.network.visualColumnNames[lesionedCoord]
+
+    plt.figure()
+    for label, sim in [("remapping enabled", experimentalSim), ("control (no plasticity)", controlSim)]:
+        rateRecord = sim.network.populations[lesionedPop].rateRecord
+        times = [i * sim.tau for i in range(len(rateRecord))]
+        plt.plot(times, rateRecord, label=label)
+    for boundary in phaseBoundariesMs(experimentalSim):
+        plt.axvline(boundary, color="grey", linestyle="--", linewidth=1)
+    plt.xlabel("Time (ms)")
+    plt.ylabel("Firing rate (spikes/sec, trailing 50ms window)")
+    plt.title("Lesioned site %s: remapping vs. drift-only control (%s)" % (str(lesionedCoord), experimentalSim.lesionMode))
+    plt.legend(fontsize="small")
+    path = os.path.join(outputDir, "remapping_vs_control.png")
+    plt.savefig(path)
+    plt.close()
+    return path
+
+def buildAndRunSimulation(videoPath, beepPath, params, lesionMode, enableRemapping, seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    video = VideoFrameSource(videoPath, gridRows=params["gridRows"], gridCols=params["gridCols"])
+    audio = BeepAudioSource(beepPath, numBands=params["numAudioColumns"])
+    sim = RetinotopicAVSimulation(params, video, audio, lesionMode=lesionMode, enableRemapping=enableRemapping)
+    sim.run()
+    return sim
+
 def main():
     outputDir = os.path.join(FLAGS.figures_directory, "retinotopic_demo", datetime.utcnow().isoformat())
     os.makedirs(outputDir, exist_ok=True)
@@ -119,22 +160,25 @@ def main():
     print("Audio input file:  %s" % beepPath)
 
     params = buildDefaultParams()
-    video = VideoFrameSource(videoPath, gridRows=params["gridRows"], gridCols=params["gridCols"])
-    audio = BeepAudioSource(beepPath, numBands=params["numAudioColumns"])
-    sim = RetinotopicAVSimulation(params, video, audio, lesionMode=FLAGS.lesion_mode)
+    seed = 1234
 
-    print("Running '%s' scenario (popCount=%d, phaseDurationMs=%d)..." %
+    print("Running '%s' scenario with remapping enabled (popCount=%d, phaseDurationMs=%d)..." %
           (FLAGS.lesion_mode, params["popCount"], params["phaseDurationMs"]))
-    sim.run()
+    experimentalSim = buildAndRunSimulation(videoPath, beepPath, params, FLAGS.lesion_mode, enableRemapping=True, seed=seed)
 
-    weightPath = plotWeightHistory(sim, outputDir)
-    tracePath = plotActivityTraces(sim, outputDir)
-    snapshotPath = plotActivitySnapshots(sim, outputDir)
+    print("Running '%s' scenario as drift-only control (same seed, no plasticity)..." % FLAGS.lesion_mode)
+    controlSim = buildAndRunSimulation(videoPath, beepPath, params, FLAGS.lesion_mode, enableRemapping=False, seed=seed)
+
+    weightPath = plotWeightHistory(experimentalSim, outputDir)
+    tracePath = plotActivityTraces(experimentalSim, outputDir)
+    snapshotPath = plotActivitySnapshots(experimentalSim, outputDir)
+    comparisonPath = plotRemappingVsControl(experimentalSim, controlSim, outputDir)
 
     print("Wrote:")
     print("  " + weightPath)
     print("  " + tracePath)
     print("  " + snapshotPath)
+    print("  " + comparisonPath)
 
 if __name__ == "__main__":
     main()

@@ -8,6 +8,13 @@ def buildDefaultParams():
     params["frameDurationMs"] = 5
     params["phaseDurationMs"] = 20
 
+    # Visual input is flashed on for flashDurationMs, then blanked (dropped to
+    # baselineRateV) for blankDurationMs, repeating - instead of driving
+    # continuously from a looping clip with no rest between presentations.
+    # See RetinotopicAVSimulation's module docstring for why.
+    params["flashDurationMs"] = 5
+    params["blankDurationMs"] = 5
+
     params["serotoninLevelV"] = 10
     params["serotoninLevelA"] = 10
     params["remapSerotoninLevel"] = 30

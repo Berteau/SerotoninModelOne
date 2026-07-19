@@ -25,10 +25,23 @@ Two lesion modes are supported:
               neighbors, so remapping is instead carried by the cross-modal
               audio -> visual connections at the two grid edges, mirroring
               cross-modal reorganization following complete visual loss.
+
+Visual input is presented as discrete flashes (params["flashDurationMs"] of
+real video-driven rates) separated by blank inter-stimulus intervals
+(params["blankDurationMs"] at baselineRateV), repeating for as long as visual
+input isn't muted. Earlier versions drove the visual columns continuously
+from a small looping video clip for the whole run, which gave every column a
+sustained, unchanging drive with no onset transients or rest between them -
+on inspection that made it impossible to tell a real stimulus response apart
+from this network's baseline tendency to drift upward under any sustained
+input. Flash/blank cycling doesn't fix that tendency by itself, but it at
+least gives the visual columns recurring transitions to respond to, instead
+of one uninterrupted ramp. Audio is unaffected and keeps driving continuously
+throughout, per the "audio stays active" requirement.
 '''
 
 class RetinotopicAVSimulation():
-    def __init__(self, params, videoSource, audioSource, lesionMode="scotoma"):
+    def __init__(self, params, videoSource, audioSource, lesionMode="scotoma", enableRemapping=True):
         if lesionMode not in ("scotoma", "full"):
             raise ValueError("lesionMode must be 'scotoma' or 'full', got %r" % lesionMode)
         self.params = params
@@ -36,7 +49,15 @@ class RetinotopicAVSimulation():
         self.videoSource = videoSource
         self.audioSource = audioSource
         self.lesionMode = lesionMode
+        # enableRemapping=False is a control condition: phase3/phase4 still
+        # run (same duration, same muting), but serotonin never rises and
+        # plasticity never switches on. Comparing against this control is the
+        # only way to tell genuine remapping (caused by the potentiated
+        # synapses) apart from generic network drift over time.
+        self.enableRemapping = enableRemapping
         self.frameDurationMs = params["frameDurationMs"]
+        self.flashDurationMs = params.get("flashDurationMs", self.frameDurationMs)
+        self.blankDurationMs = params.get("blankDurationMs", self.frameDurationMs)
         self.network = RetinotopicAVNetwork(self.tau, self, params, "RetinotopicAVNetwork_" + lesionMode)
 
         gridRows = self.network.gridRows
@@ -70,7 +91,7 @@ class RetinotopicAVSimulation():
         self.activitySnapshots = {}
         self._lastPhaseWindow = None
 
-        self._lastFrameIndex = None
+        self._lastDrivenState = None
         self._lastAudioState = None
 
     def _collectRemappingAxons(self):
@@ -103,15 +124,29 @@ class RetinotopicAVSimulation():
             coords = coords + self.spareNeighborColumns
         return [self.network.visualColumnNames[rc] for rc in coords]
 
+    def _isFlashOn(self, t):
+        cycle = self.flashDurationMs + self.blankDurationMs
+        if cycle <= 0:
+            return True
+        return (t % cycle) < self.flashDurationMs
+
+    def _blankVisualGrid(self):
+        return np.full((self.network.gridRows, self.network.gridCols), self.params["baselineRateV"])
+
     def _driveInputs(self, t, muteVisual):
         # Only push new rates into the input populations when the underlying
-        # video frame / beep state actually changes, instead of on every tau
-        # step - the network step itself dominates runtime, so this avoids
-        # thousands of redundant setRate() calls across a phase.
+        # video frame / flash-vs-blank state actually changes, instead of on
+        # every tau step - the network step itself dominates runtime, so this
+        # avoids thousands of redundant setRate() calls across a phase.
+        flashOn = self._isFlashOn(t)
         frameIndex = int(t // self.frameDurationMs)
-        if frameIndex != self._lastFrameIndex:
-            self._lastFrameIndex = frameIndex
-            self.network.setVisualInputRates(self.videoSource.rateFrameAt(frameIndex))
+        drivenState = (frameIndex, flashOn)
+        if drivenState != self._lastDrivenState:
+            self._lastDrivenState = drivenState
+            if flashOn:
+                self.network.setVisualInputRates(self.videoSource.rateFrameAt(frameIndex))
+            else:
+                self.network.setVisualInputRates(self._blankVisualGrid())
             if muteVisual:
                 self._muteLesionedColumns()
 
@@ -130,9 +165,9 @@ class RetinotopicAVSimulation():
         end = maxTime * phase
         tspan = arange(start, end, self.tau)
         # Force the first step of every phase to re-apply rates (and muting,
-        # if this phase requires it), since the frame/beep index alone can't
-        # tell a phase transition apart from an unchanged frame.
-        self._lastFrameIndex = None
+        # if this phase requires it), since the frame/flash/beep state alone
+        # can't tell a phase transition apart from an unchanged state.
+        self._lastDrivenState = None
         self._lastAudioState = None
         for t in tspan:
             self._driveInputs(t, muteVisual)
@@ -178,12 +213,13 @@ class RetinotopicAVSimulation():
         # exactly as TwoColumnSimulation reads source.postSynapticReceptors[0].weight.
         self.weightsPrior = [axon.postSynapticReceptors[0].weight for axon in self.remappingAxons]
 
-        raisedTransmitters = {"5HT2A": self.params["remapSerotoninLevel"], "5HT1A": self.params["remapSerotoninLevel"]}
-        self.network.setSerotoninForColumns(self._affectedColumnNames(), raisedTransmitters)
+        if self.enableRemapping:
+            raisedTransmitters = {"5HT2A": self.params["remapSerotoninLevel"], "5HT1A": self.params["remapSerotoninLevel"]}
+            self.network.setSerotoninForColumns(self._affectedColumnNames(), raisedTransmitters)
 
-        for axon in self.remappingAxons:
-            axon.postSynapticReceptors[0].plasticity = True
-            axon.postSynapticReceptors[0].c_p = self.params["remapPlasticityCp"]
+            for axon in self.remappingAxons:
+                axon.postSynapticReceptors[0].plasticity = True
+                axon.postSynapticReceptors[0].c_p = self.params["remapPlasticityCp"]
 
         self.runPhase(3, muteVisual=True)
 
@@ -191,11 +227,12 @@ class RetinotopicAVSimulation():
         self.activitySnapshots["3_serotonin_plasticity"] = self.visualActivitySnapshot(*self._lastPhaseWindow)
 
     def phase4(self):
-        for axon in self.remappingAxons:
-            axon.postSynapticReceptors[0].plasticity = False
+        if self.enableRemapping:
+            for axon in self.remappingAxons:
+                axon.postSynapticReceptors[0].plasticity = False
 
-        baselineTransmitters = {"5HT2A": self.params["serotoninLevelV"], "5HT1A": self.params["serotoninLevelV"]}
-        self.network.setSerotoninForColumns(self._affectedColumnNames(), baselineTransmitters)
+            baselineTransmitters = {"5HT2A": self.params["serotoninLevelV"], "5HT1A": self.params["serotoninLevelV"]}
+            self.network.setSerotoninForColumns(self._affectedColumnNames(), baselineTransmitters)
 
         self.runPhase(4, muteVisual=True)
         self.activitySnapshots["4_remapped"] = self.visualActivitySnapshot(*self._lastPhaseWindow)

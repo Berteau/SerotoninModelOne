@@ -29,23 +29,35 @@ TwoColumnSimulation (full input -> sensory loss -> serotonin rise with
 plasticity -> remapped, stable state), but on the 100-column retinotopic /
 20-column tonotopic network, driven by a real (synthetic) greyscale video and
 beep score. It runs both required scenarios - a partial scotoma and a
-full-field visual loss, with audio left active throughout both - and asserts
-that the relevant "remapping" synapses actually potentiated.
+full-field visual loss, with audio left active throughout both.
+
+For each scenario it runs two conditions from the same random seed (so the
+network topology and initial state are identical): the real remapping
+condition, and a control where phase3/phase4 still run (same duration, same
+muting) but serotonin never rises and plasticity never switches on. This
+network has enough recurrent excitation that overall activity drifts upward
+over time on its own (visible even within phase1, before any lesion or
+plasticity change) - so the pass criteria below don't just check that the
+deprived column's activity went up, they check that (a) the remapping
+synapses' weight only moves in the real condition, and (b) the real
+condition's recovery specifically outstrips the control's, isolating the
+effect of remapping from generic drift.
 
 This is a runnable script rather than a pytest suite, consistent with the
 rest of this repository's Test*.py files. It exits with status 0 on success
 and 1 if any assertion fails.
 '''
 
-random.seed(1234)
-np.random.seed(1234)
+SEED = 1234
 
 buildParams = buildDefaultParams
 
-def runScenario(lesionMode, videoPath, beepPath, params):
+def runScenario(lesionMode, videoPath, beepPath, params, enableRemapping):
+    random.seed(SEED)
+    np.random.seed(SEED)
     video = VideoFrameSource(videoPath, gridRows=params["gridRows"], gridCols=params["gridCols"])
     audio = BeepAudioSource(beepPath, numBands=params["numAudioColumns"])
-    sim = RetinotopicAVSimulation(params, video, audio, lesionMode=lesionMode)
+    sim = RetinotopicAVSimulation(params, video, audio, lesionMode=lesionMode, enableRemapping=enableRemapping)
     sim.run()
     return sim
 
@@ -78,6 +90,30 @@ def checkRemapping(lesionMode, sim, failures):
     if fraction <= 0:
         failures.append("[%s] No individual remapping synapse potentiated" % lesionMode)
 
+def checkControlHasNoWeightChange(lesionMode, controlSim, failures):
+    # Without ever setting plasticity=True, boutonSpike()/postSynapticSpikeFeedback()
+    # can't touch weight at all - this should hold exactly, and guards against
+    # a regression that enables plasticity unconditionally somewhere.
+    if controlSim.weightsPrior != controlSim.weightsPost:
+        failures.append("[%s control] Remapping weight changed even though plasticity was never enabled" % lesionMode)
+
+def checkRemappingOutstripsDrift(lesionMode, experimentalSim, controlSim, failures):
+    # The real causal claim: with the same network, same stimuli, and the
+    # same generic activity drift in both conditions, the lesioned site
+    # should recover further with remapping enabled than without it.
+    lesionedCoord = experimentalSim.lesionedColumns[0]
+    experimentalActivity = experimentalSim.activitySnapshots["4_remapped"][lesionedCoord]
+    controlActivity = controlSim.activitySnapshots["4_remapped"][lesionedCoord]
+
+    print("[%s] lesioned-site phase4 activity: remapping=%.4f control (drift only)=%.4f" %
+          (lesionMode, experimentalActivity, controlActivity))
+
+    if experimentalActivity <= controlActivity:
+        failures.append(
+            "[%s] Remapping condition's recovered activity (%.4f) did not exceed the no-plasticity control's (%.4f) - "
+            "the apparent recovery may just be generic network drift, not remapping" %
+            (lesionMode, experimentalActivity, controlActivity))
+
 def main():
     failures = []
     with tempfile.TemporaryDirectory() as tmpDir:
@@ -86,10 +122,16 @@ def main():
         params = buildParams()
 
         for lesionMode in ("scotoma", "full"):
-            print("Running %s scenario..." % lesionMode)
-            sim = runScenario(lesionMode, videoPath, beepPath, params)
-            checkNetworkShape(sim, failures)
-            checkRemapping(lesionMode, sim, failures)
+            print("Running %s scenario (remapping)..." % lesionMode)
+            experimentalSim = runScenario(lesionMode, videoPath, beepPath, params, enableRemapping=True)
+            checkNetworkShape(experimentalSim, failures)
+            checkRemapping(lesionMode, experimentalSim, failures)
+
+            print("Running %s scenario (control, no plasticity)..." % lesionMode)
+            controlSim = runScenario(lesionMode, videoPath, beepPath, params, enableRemapping=False)
+            checkControlHasNoWeightChange(lesionMode, controlSim, failures)
+
+            checkRemappingOutstripsDrift(lesionMode, experimentalSim, controlSim, failures)
 
     if failures:
         print("FAILED:")
@@ -97,7 +139,7 @@ def main():
             print("  - " + failure)
         sys.exit(1)
     else:
-        print("PASSED: retinotopic/tonotopic remapping occurred in both scenarios.")
+        print("PASSED: remapping-specific recovery (beyond generic drift) occurred in both scenarios.")
 
 if __name__ == "__main__":
     main()
