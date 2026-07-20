@@ -44,6 +44,9 @@ class RateNeuron:
         #   diffuseCurrent - set when diffuse serotonin changes, persists
         #   externalInput  - optional constant injected current
         self.synapticInput = 0.0
+        # Per-source-population synaptic current this step, used by the
+        # leave-one-out ablation influence metric (RatePopulation.stepCells).
+        self.synapticInputBySource = {}
         self.diffuseCurrent = 0.0
         self.externalInput = 0.0
         self.I = 0.0
@@ -66,8 +69,11 @@ class RateNeuron:
     def addOutput(self, axon):
         self.outputs.append(axon)
 
-    def addSynapticTransmission(self, current):
+    def addSynapticTransmission(self, current, sourcePopulation=None):
         self.synapticInput += current
+        if sourcePopulation is not None:
+            self.synapticInputBySource[sourcePopulation] = \
+                self.synapticInputBySource.get(sourcePopulation, 0.0) + current
 
     def setInjectedCurrent(self, current):
         self.externalInput = float(current)
@@ -89,9 +95,14 @@ class RateNeuron:
         if self.rate < 0.0:
             self.rate = 0.0
         self.rateRecord.append(self.rate)
-        # Synaptic drive is recomputed from scratch each step by the inbound
-        # axons (in the population's output phase), so clear it here.
+        # NOTE: synapticInput / synapticInputBySource are NOT cleared here.
+        # The population clears them (clearSynapticAccumulators) after computing
+        # the ablation influence metric, which needs the per-source breakdown
+        # that produced this step's self.I. Inbound axons refill them next step.
+
+    def clearSynapticAccumulators(self):
         self.synapticInput = 0.0
+        self.synapticInputBySource = {}
 
 
 class RateInputNeuron:

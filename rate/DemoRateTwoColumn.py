@@ -75,8 +75,11 @@ def plot_rates(sim, outdir, tau):
 
 def plot_influence(sim, outdir, tau):
     pa = sim.network.populations["pyramidalsA"]
-    infA = np.array(sim.network.populations["InputA"].influenceRecord[pa])
-    infB = np.array(sim.network.populations["InputB"].influenceRecord[pa])
+    inputA = sim.network.populations["InputA"]
+    inputB = sim.network.populations["InputB"]
+    # Leave-one-out ablation influence of each input on P_alpha's commanded rate.
+    infA = np.array(pa.ablationInfluence[inputA])
+    infB = np.array(pa.ablationInfluence[inputB])
     t = np.arange(len(infA)) * tau
     fig, ax = plt.subplots(figsize=(9, 4))
     ax.plot(t, -smooth(infA, 20.0, tau), color="C3", label="Input alpha (own, plotted negative)")
@@ -84,8 +87,8 @@ def plot_influence(sim, outdir, tau):
     ax.axhline(0, color="0.7", lw=0.8)
     epoch_lines(ax, sim.epochBoundaries)
     ax.set_xlabel("Time (ms)")
-    ax.set_ylabel("Driving-factor influence")
-    ax.set_title("Relative influence of Inputs alpha/beta on alpha pyramidal firing")
+    ax.set_ylabel("Ablation influence on P_alpha rate (Hz)")
+    ax.set_title("Relative influence of Inputs alpha/beta on alpha pyramidal firing (leave-one-out)")
     ax.legend(fontsize="small")
     fig.tight_layout()
     path = os.path.join(outdir, "rate_twocolumn_influence.png")

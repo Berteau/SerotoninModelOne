@@ -48,8 +48,17 @@ class RatePopulation:
         self.outboundAxons = []
         self.outboundAxonsByTargetPop = {}
         self.inboundAxons = []
-        self.influenceRecord = {}
         self.rateRecord = []
+
+        # Leave-one-out ablation influence: for each source population S that
+        # projects to this one, ablationInfluence[S] is a per-step time series
+        # of sum_j [ F(I_j) - F(I_j - I_{S->j}) ] over this population's cells j
+        # -- the causal effect of removing S's synaptic current on the commanded
+        # firing rate. Set trackInfluence=False on populations you don't measure
+        # to skip the extra transfer evaluations.
+        self.trackInfluence = not isInput
+        self.ablationInfluence = {}
+        self._inboundSourcePops = None
 
     # ---- construction ----
 
@@ -57,7 +66,6 @@ class RatePopulation:
         axonalReceptorFactories = axonalReceptorFactories or []
         if targetPopulation not in self.outboundAxonsByTargetPop:
             self.outboundAxonsByTargetPop[targetPopulation] = []
-            self.influenceRecord[targetPopulation] = []
         for source in self.cells:
             for target in targetPopulation.cells:
                 weight = weightFunction(source, target)
@@ -92,12 +100,35 @@ class RatePopulation:
 
     # ---- per-step ----
 
+    def _inboundSources(self):
+        if self._inboundSourcePops is None:
+            self._inboundSourcePops = sorted(
+                {a.sourcePopulation for a in self.inboundAxons if a.sourcePopulation is not None},
+                key=lambda p: p.name)
+        return self._inboundSourcePops
+
     def stepCells(self):
         for cell in self.cells:
             cell.step()
         self.rateRecord.append(sum(c.rate for c in self.cells) / len(self.cells))
-        for targetPop, axons in self.outboundAxonsByTargetPop.items():
-            self.influenceRecord[targetPop].append(sum(a.tempDriveFactor for a in axons))
+
+        if self.trackInfluence and not self.isInput:
+            # Leave-one-out ablation influence of each source population S on
+            # this population: sum over cells j of F(I_j) - F(I_j - I_{S->j}).
+            # Difference the commanded rate F(I) (not the membrane-filtered
+            # rate) so it reflects the instantaneous causal effect. Iterate a
+            # fixed source set so every source's series has equal length.
+            for srcPop in self._inboundSources():
+                total = 0.0
+                for cell in self.cells:
+                    iSrc = cell.synapticInputBySource.get(srcPop, 0.0)
+                    if iSrc != 0.0:
+                        total += cell.transfer(cell.I) - cell.transfer(cell.I - iSrc)
+                self.ablationInfluence.setdefault(srcPop, []).append(total)
+
+        if not self.isInput:
+            for cell in self.cells:
+                cell.clearSynapticAccumulators()
 
     def stepOutputs(self):
         for axon in self.outboundAxons:

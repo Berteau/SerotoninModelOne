@@ -85,14 +85,9 @@ class RateAxon:
         self.plasticityWeightMax = float("inf")
         self.pruned = False
 
-        # Threshold used only by the cross-modal driving-factor *metric* (phi).
-        # Kept fixed (independent of whether/when plasticity is enabled) so the
-        # "relative influence" measurement is comparable across epochs.
-        self.influenceThreshold = 0.0
-
-        # Records / diagnostics
-        self.driveFactor = []       # per-step cross-modal driving factor phi
-        self.tempDriveFactor = 0.0
+        # Cache the source population once (used to attribute this axon's
+        # injected current to its source for the ablation influence metric).
+        self.sourcePopulation = getattr(source, "parentPopulation", None)
 
     # ---- transmission gain / failure rollup ----
 
@@ -159,19 +154,14 @@ class RateAxon:
     def step(self):
         self._updateConductances()
 
-        # Cross-modal driving factor phi (recorded for the "relative influence"
-        # metric): presynaptic-rate-weighted postsynaptic calcium above threshold.
-        if self.glutamatergic:
-            self.tempDriveFactor = (self.source.rate / 1000.0) * max(self.calciumProxy() - self.influenceThreshold, 0.0)
-        else:
-            self.tempDriveFactor = 0.0
-        self.driveFactor.append(self.tempDriveFactor)
-
         if self.plasticity:
             self._applyPlasticity()
 
-        # Inject current into the postsynaptic neuron for this step.
-        self.target.addSynapticTransmission(self.getEffectiveWeight() * self._conductanceSum())
+        # Inject current into the postsynaptic neuron for this step, attributed
+        # to this axon's source population so the target can compute the
+        # leave-one-out ablation influence of each source.
+        self.target.addSynapticTransmission(
+            self.getEffectiveWeight() * self._conductanceSum(), self.sourcePopulation)
 
     def _applyPlasticity(self):
         # Rate reduction of the methods-draft calcium/STDP rule (Graupner &
