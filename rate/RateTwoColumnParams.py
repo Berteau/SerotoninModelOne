@@ -23,7 +23,7 @@ def buildDefaultParams():
     # Somatic serotonin receptor weights (per unit serotonin level). Code-sign
     # convention: 5HT2A depolarizing (+), 5HT1A hyperpolarizing (-); |2A|>|1A|
     # so raising serotonin in epoch 3 nets depolarizing drive.
-    params["Somatic5HT2AWeight"] = 2.0
+    params["Somatic5HT2AWeight"] = 5.0
     params["Somatic5HT1AWeight"] = -1.0
     params["Somatic5HT2AWeightLTS"] = 3.0
 
@@ -32,11 +32,11 @@ def buildDefaultParams():
     params["Axonal5HT2AWeight"] = 0.005
 
     # Feedforward input weights (pooled; divided by popCount per synapse).
-    params["inputWeightA"] = 400.0
-    params["inputWeightB"] = 400.0
-    params["inputWeightAB"] = 200.0
+    params["inputWeightA"] = 500.0
+    params["inputWeightB"] = 500.0
+    params["inputWeightAB"] = 300.0
     params["crossModalABLikelihood"] = 0.5
-    params["inputWeightBA"] = 200.0      # S_B -> P_A: the remapping synapses
+    params["inputWeightBA"] = 300.0      # S_B -> P_A: the remapping synapses
     params["crossModalBALikelihood"] = 0.5
 
     # Recurrent / local circuit
@@ -52,8 +52,12 @@ def buildDefaultParams():
     # Plasticity (Graupner/Brunel calcium rule), inflated per the draft for the
     # short epoch. Tuned so the remapping synapses potentiate meaningfully in
     # epoch 3 without diverging.
-    params["gamma_p"] = 1e-4
-    params["gamma_d"] = 1e-3
-    params["plasticityThreshold"] = 50.0
+    params["gamma_p"] = 50.0
+    params["gamma_d"] = 5e-4
+    params["plasticityThreshold"] = 3.0
+    # Soft weight ceiling: remapping synapses may potentiate up to this multiple
+    # of their initial weight, past which LTP smoothly saturates (keeps the
+    # calcium-driven rule stable). See RateAxon._applyPlasticity.
+    params["plasticityCeilingFactor"] = 4.0
 
     return params

@@ -50,6 +50,7 @@ class RateAxon:
     def __init__(self, tau, weight, source, target, baseFailureRate=BASE_FAILURE_RATE):
         self.tau = tau
         self.weight = weight
+        self.initialWeight = weight
         self.source = source
         self.target = target
 
@@ -75,6 +76,13 @@ class RateAxon:
         self.gamma_p = 0.0
         self.gamma_d = 0.0
         self.plasticityThreshold = 0.0
+        # Soft upper bound on the weight (Gütig et al. 2003 / van Rossum et al.
+        # 2000 style): potentiation is scaled by (1 - w/w_max) so LTP smoothly
+        # vanishes as the weight approaches w_max, making the calcium-driven
+        # rule stable instead of diverging (calcium ~ weight is otherwise a
+        # positive-feedback loop). A departure from the paper's unbounded rule,
+        # adopted because bounded stability is the point of the rate model.
+        self.plasticityWeightMax = float("inf")
         self.pruned = False
 
         # Threshold used only by the cross-modal driving-factor *metric* (phi).
@@ -99,15 +107,20 @@ class RateAxon:
     def getEffectiveWeight(self):
         return self.weight * self.getTransmissionGain()
 
-    def enablePlasticity(self, gamma_p, gamma_d, threshold):
+    def enablePlasticity(self, gamma_p, gamma_d, threshold, ceilingFactor=None):
         # Turn on the calcium-based plasticity rule with the given constants.
         # A synapse already pruned to zero stays pruned (matches the paper).
+        # ceilingFactor sets the soft weight ceiling as a multiple of the
+        # synapse's initial weight (w_max = ceilingFactor * initialWeight);
+        # None leaves it unbounded (paper-faithful, but can diverge).
         if self.pruned:
             return
         self.plasticity = True
         self.gamma_p = gamma_p
         self.gamma_d = gamma_d
         self.plasticityThreshold = threshold
+        if ceilingFactor is not None:
+            self.plasticityWeightMax = ceilingFactor * self.initialWeight
 
     def disablePlasticity(self):
         self.plasticity = False
@@ -183,7 +196,11 @@ class RateAxon:
         ca_above = self.calciumProxy() - self.plasticityThreshold
         if ca_above < 0.0:
             ca_above = 0.0
-        potentiation = self.gamma_p * (r_post / 1000.0) * ca_above
+        # Soft upper bound: potentiation fades to zero as weight -> w_max.
+        headroom = 1.0 - self.weight / self.plasticityWeightMax
+        if headroom < 0.0:
+            headroom = 0.0
+        potentiation = self.gamma_p * (r_post / 1000.0) * ca_above * headroom
         dw = self.tau * (r_pre / 1000.0) * (potentiation - self.gamma_d)
         self.weight += dw
         if self.weight <= 0.0:

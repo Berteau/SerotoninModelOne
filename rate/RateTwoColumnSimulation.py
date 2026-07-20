@@ -58,7 +58,9 @@ class RateTwoColumnSimulation:
     def epoch3(self):
         self.network.setSerotoninA(self.params["remapSerotoninLevel"])
         for axon in self.remapping:
-            axon.enablePlasticity(self.params["gamma_p"], self.params["gamma_d"], self.params["plasticityThreshold"])
+            axon.enablePlasticity(self.params["gamma_p"], self.params["gamma_d"],
+                                  self.params["plasticityThreshold"],
+                                  ceilingFactor=self.params["plasticityCeilingFactor"])
         self.runEpoch(3)
         for axon in self.remapping:
             axon.disablePlasticity()
