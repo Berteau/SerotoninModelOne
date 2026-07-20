@@ -74,8 +74,13 @@ class RateAxon:
         self.plasticity = False
         self.gamma_p = 0.0
         self.gamma_d = 0.0
-        self.threshold = 0.0
+        self.plasticityThreshold = 0.0
         self.pruned = False
+
+        # Threshold used only by the cross-modal driving-factor *metric* (phi).
+        # Kept fixed (independent of whether/when plasticity is enabled) so the
+        # "relative influence" measurement is comparable across epochs.
+        self.influenceThreshold = 0.0
 
         # Records / diagnostics
         self.driveFactor = []       # per-step cross-modal driving factor phi
@@ -102,7 +107,7 @@ class RateAxon:
         self.plasticity = True
         self.gamma_p = gamma_p
         self.gamma_d = gamma_d
-        self.threshold = threshold
+        self.plasticityThreshold = threshold
 
     def disablePlasticity(self):
         self.plasticity = False
@@ -144,7 +149,7 @@ class RateAxon:
         # Cross-modal driving factor phi (recorded for the "relative influence"
         # metric): presynaptic-rate-weighted postsynaptic calcium above threshold.
         if self.glutamatergic:
-            self.tempDriveFactor = (self.source.rate / 1000.0) * max(self.calciumProxy() - self.threshold, 0.0)
+            self.tempDriveFactor = (self.source.rate / 1000.0) * max(self.calciumProxy() - self.influenceThreshold, 0.0)
         else:
             self.tempDriveFactor = 0.0
         self.driveFactor.append(self.tempDriveFactor)
@@ -175,7 +180,7 @@ class RateAxon:
         # driven to zero weight is pinned there and pruned, as in the paper.
         r_pre = self.source.rate
         r_post = self.target.rate
-        ca_above = self.calciumProxy() - self.threshold
+        ca_above = self.calciumProxy() - self.plasticityThreshold
         if ca_above < 0.0:
             ca_above = 0.0
         potentiation = self.gamma_p * (r_post / 1000.0) * ca_above
