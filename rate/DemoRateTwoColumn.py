@@ -38,11 +38,17 @@ FIG_DIR = os.path.join(os.curdir, "figures", "rate_twocolumn")
 
 
 def smooth(series, win_ms, tau):
+    # Boxcar smoothing with edge-extension (mode="nearest"), NOT zero-padding.
+    # np.convolve(mode="same") zero-pads the ends, which drags the first/last
+    # ~half-window of samples toward zero and creates a spurious ramp at t=0 in
+    # otherwise-flat traces; uniform_filter1d(mode="nearest") holds the edge
+    # value instead.
+    from scipy.ndimage import uniform_filter1d
     n = max(1, int(win_ms / tau))
-    if len(series) < n:
-        return np.asarray(series, dtype=float)
-    kernel = np.ones(n) / n
-    return np.convolve(np.asarray(series, dtype=float), kernel, mode="same")
+    s = np.asarray(series, dtype=float)
+    if len(s) < n:
+        return s
+    return uniform_filter1d(s, size=n, mode="nearest")
 
 
 def epoch_lines(ax, boundaries):

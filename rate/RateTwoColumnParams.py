@@ -9,6 +9,7 @@ def buildDefaultParams():
     params = {}
     params["tau"] = 0.1
     params["epochDurationMs"] = 1000     # paper figures use 1000 ms epochs
+    params["warmupMs"] = 500             # settle to steady state before epoch 1
     params["popCount"] = 20
 
     # Input drive (Poisson lambda, Hz). Draft baseline lambda = 30.
