@@ -23,7 +23,7 @@ Records kept per step:
 class RatePopulation:
     def __init__(self, tau, cellType, popCount, diffuseSomaReceptorFactories,
                  diffuseTransmitters, parentNetwork, name,
-                 isInput=False, inputRate=0.0):
+                 isInput=False, inputRate=0.0, neuronFactory=None):
         self.tau = tau
         self.cellType = cellType
         self.name = name
@@ -34,11 +34,18 @@ class RatePopulation:
         self.diffuseSomaReceptorFactories = diffuseSomaReceptorFactories or []
         self.diffuseTransmitters = dict(diffuseTransmitters or {})
 
+        # neuronFactory(tau, cellType, name, parentPop) builds each non-input
+        # cell; defaults to a plain RateNeuron. The retinotopic V1 area passes a
+        # factory that returns NormalizedMixtureNeuron so V1 cells combine their
+        # streams by the Sulfaro normalized mixture instead of additive summation.
+        if neuronFactory is None:
+            neuronFactory = lambda tau_, ct, nm, parentPop: RateNeuron(tau_, ct, nm, parentPop=parentPop)
+
         if isInput:
             self.cells = [RateInputNeuron(tau, inputRate, "%s.in.%d" % (name, i), parentPop=self)
                           for i in range(popCount)]
         else:
-            self.cells = [RateNeuron(tau, cellType, "%s.%s.%d" % (name, cellType, i), parentPop=self)
+            self.cells = [neuronFactory(tau, cellType, "%s.%s.%d" % (name, cellType, i), self)
                           for i in range(popCount)]
             for cell in self.cells:
                 for factory in self.diffuseSomaReceptorFactories:
