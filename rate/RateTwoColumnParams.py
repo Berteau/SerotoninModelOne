@@ -61,4 +61,13 @@ def buildDefaultParams():
     # calcium-driven rule stable). See RateAxon._applyPlasticity.
     params["plasticityCeilingFactor"] = 4.0
 
+    # Pharmacological (5HT2A-agonist / psilocybin) experiment. No sensory loss;
+    # in epoch 2 only 5HT2A is raised (to pharma5HT2ALevel) in BOTH regions,
+    # 5HT1A stays at baseline, and plasticity runs an order of magnitude weaker
+    # than the sensory experiment (reflecting the far shorter modeled timescale,
+    # per the methods draft).
+    params["pharma5HT2ALevel"] = 40.0
+    params["pharma_gamma_p"] = params["gamma_p"] * 0.1
+    params["pharma_gamma_d"] = params["gamma_d"] * 0.1
+
     return params

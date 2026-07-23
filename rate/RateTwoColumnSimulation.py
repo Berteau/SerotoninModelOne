@@ -1,6 +1,4 @@
-import numpy as np
-
-from rate.RateTwoColumnNetwork import RateTwoColumnNetwork
+from rate.RateSimulationBase import RateSimulationBase
 
 '''
 Four-epoch sensory-loss simulation on the rate two-region network, mirroring
@@ -21,53 +19,7 @@ were an artifact of the 2003/2007 integration mismatch).
 '''
 
 
-class RateTwoColumnSimulation:
-    def __init__(self, params):
-        self.params = params
-        self.tau = params["tau"]
-        self.epochDurationMs = params["epochDurationMs"]
-        # Settling period run at baseline before epoch 1, so the recorded epochs
-        # start from the network's steady state rather than from rest. Without
-        # it, the influence/rate traces show a startup overshoot in epoch 1 (the
-        # network ramping up from zero and settling) that reads as ipsimodal
-        # influence "declining" during baseline before it flattens out.
-        self.warmupMs = params.get("warmupMs", 500.0)
-        self.network = RateTwoColumnNetwork(self.tau, params)
-        self.remapping = self.network.remappingAxons()
-
-        # Recorded time series (mean weight of remapping synapses per step).
-        self.weightHistory = []
-        self.epochBoundaries = []
-        self.weightsByEpoch = {}
-
-    def _record_weight(self):
-        if self.remapping:
-            self.weightHistory.append(float(np.mean([a.weight for a in self.remapping])))
-
-    def warmup(self):
-        for _ in np.arange(0.0, self.warmupMs, self.tau):
-            self.network.step()
-        self._resetRecords()
-
-    def _resetRecords(self):
-        # Discard everything recorded during warmup so the recorded window
-        # begins at t=0 in steady state.
-        self.weightHistory = []
-        self.epochBoundaries = []
-        for pop in self.network.populations.values():
-            pop.rateRecord = []
-            pop.ablationInfluence = {}
-            for cell in pop.cells:
-                cell.rateRecord = []
-
-    def runEpoch(self, epoch):
-        start = self.epochDurationMs * (epoch - 1)
-        end = self.epochDurationMs * epoch
-        for _ in np.arange(start, end, self.tau):
-            self.network.step()
-            self._record_weight()
-        self.epochBoundaries.append(end)
-
+class RateTwoColumnSimulation(RateSimulationBase):
     def epoch1(self):
         self.runEpoch(1)
         self.weightsByEpoch["1_baseline"] = [a.weight for a in self.remapping]

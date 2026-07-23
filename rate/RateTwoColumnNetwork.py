@@ -108,9 +108,16 @@ class RateTwoColumnNetwork:
         self._setRegionSerotonin("B", level)
 
     def _setRegionSerotonin(self, region, level):
-        transmitters = {"5HT2A": level, "5HT1A": level}
+        # Uniform serotonin: both 5HT2A and 5HT1A set to the same level.
+        self.setRegionTransmitters(region, {"5HT2A": level, "5HT1A": level})
+
+    def setRegionTransmitters(self, region, transmitters):
+        # Set arbitrary per-receptor-type diffuse levels for a region, e.g.
+        # {"5HT2A": 40, "5HT1A": 10} to raise only 5HT2A (pharmacological /
+        # 5HT2A-agonist manipulation). Updates somatic receptors on the region's
+        # cells and axonal receptors on its inbound axons.
         for key in ("pyramidals" + region, "fastSpikings" + region, "lowThresholds" + region):
-            self.populations[key].setDiffuseTransmitters(transmitters)
+            self.populations[key].setDiffuseTransmitters(dict(transmitters))
 
     # ---- remapping synapses (S_B -> P_A) ----
 
