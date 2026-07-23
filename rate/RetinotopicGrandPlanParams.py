@@ -43,7 +43,7 @@ def buildGrandPlanParams(gridSize=10, cellsPerColumn=8, categoryCount=2):
     # These set each stream's raw synaptic current; the mixture then normalizes
     # by the stream WEIGHTS above, so absolute rates stay in a sane range.
     params["visualWeight"] = 500.0           # bottom-up: VisualInput -> V1 (topographic)
-    params["audioWeight"] = 150.0            # bottom-up cross-modal: AudioInput -> V1 (remapping)
+    params["audioWeight"] = 300.0            # bottom-up cross-modal: AudioInput -> V1 (remapping)
     params["audioToV1Likelihood"] = 0.3
     params["v1RecurrentWeight"] = 120.0      # self: within-column recurrent excitation
     params["v1ToFsWeight"] = 300.0           # self loop: V1 -> FS drive
@@ -56,10 +56,14 @@ def buildGrandPlanParams(gridSize=10, cellsPerColumn=8, categoryCount=2):
     params["categoryVigilance"] = 5.0        # reject threshold (Hz); below -> no category wins
 
     # --- plasticity (audio remapping synapses), reusing the validated rule ---
-    params["gamma_p"] = 50.0
+    # Tuned (with audioWeight/ceiling) so the potentiated cross-modal drive is
+    # strong enough to functionally restore deprived-column firing after the
+    # normalized mixture's weight-sum division, and to persist into the return
+    # epoch -- while the no-plasticity control shows no recovery.
+    params["gamma_p"] = 200.0
     params["gamma_d"] = 5e-4
     params["plasticityThreshold"] = 3.0
-    params["plasticityCeilingFactor"] = 4.0
+    params["plasticityCeilingFactor"] = 8.0
     params["remapSerotoninLevel"] = 40.0
 
     return params

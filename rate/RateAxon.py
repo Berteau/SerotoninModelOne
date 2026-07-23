@@ -64,6 +64,16 @@ class RateAxon:
         self.g_nmda = 0.0
         self.g_gaba = 0.0
 
+        # Precomputed per-axon conductance constants (hoisted out of the per-step
+        # hot loop -- equivalent to the ALPHA[...]/TAU_F[...] dict lookups, just
+        # resolved once). tau is fixed for the life of the axon.
+        self._alpha_ampa = ALPHA["AMPA"]
+        self._alpha_nmda = ALPHA["NMDA"]
+        self._alpha_gaba = ALPHA["GABA"]
+        self._inv_tau_ampa = 1.0 / TAU_F["AMPA"]
+        self._inv_tau_nmda = 1.0 / TAU_F["NMDA"]
+        self._inv_tau_gaba = 1.0 / TAU_F["GABA"]
+
         # Transmission failure, rolled into the effective weight. Axonal 5HT2A
         # receptors modify self.failureRate; getEffectiveWeight() applies it.
         self.baseFailureRate = baseFailureRate
@@ -89,6 +99,13 @@ class RateAxon:
         # injected current to its source for the ablation influence metric).
         self.sourcePopulation = getattr(source, "parentPopulation", None)
 
+        # Cached effective weight w * clamp(1 - failureRate). It changes only
+        # when the failure rate changes (serotonin) or the weight changes
+        # (plasticity), which are rare relative to per-step reads, so we cache it
+        # and refresh at those two points instead of recomputing every step.
+        self._effWeight = 0.0
+        self._recomputeEffWeight()
+
     # ---- transmission gain / failure rollup ----
 
     def getTransmissionGain(self):
@@ -99,8 +116,11 @@ class RateAxon:
             return 1.0
         return gain
 
+    def _recomputeEffWeight(self):
+        self._effWeight = self.weight * self.getTransmissionGain()
+
     def getEffectiveWeight(self):
-        return self.weight * self.getTransmissionGain()
+        return self._effWeight
 
     def enablePlasticity(self, gamma_p, gamma_d, threshold, ceilingFactor=None):
         # Turn on the calcium-based plasticity rule with the given constants.
@@ -128,18 +148,21 @@ class RateAxon:
         # Axonal 5HT2A serotonin lowers the failure rate (raising transmission),
         # matching the spiking AxonalSerotoninReceptor: base - sum(weight*level).
         self.failureRate = self.baseFailureRate - sum(r.weight * r.level for r in self.axonalReceptors)
+        self._recomputeEffWeight()
 
     # ---- per-step dynamics ----
 
     def _updateConductances(self):
-        r = self.source.rate            # presynaptic rate, Hz
-        rms = r / 1000.0                # spikes per ms
+        rms = self.source.rate / 1000.0     # presynaptic rate -> spikes per ms
         h = self.tau
         if self.glutamatergic:
-            self.g_ampa += h * (ALPHA["AMPA"] * rms * (1.0 - self.g_ampa) - self.g_ampa / TAU_F["AMPA"])
-            self.g_nmda += h * (ALPHA["NMDA"] * rms * (1.0 - self.g_nmda) - self.g_nmda / TAU_F["NMDA"])
+            ga = self.g_ampa
+            self.g_ampa = ga + h * (self._alpha_ampa * rms * (1.0 - ga) - ga * self._inv_tau_ampa)
+            gn = self.g_nmda
+            self.g_nmda = gn + h * (self._alpha_nmda * rms * (1.0 - gn) - gn * self._inv_tau_nmda)
         else:
-            self.g_gaba += h * (ALPHA["GABA"] * rms * (1.0 - self.g_gaba) - self.g_gaba / TAU_F["GABA"])
+            gg = self.g_gaba
+            self.g_gaba = gg + h * (self._alpha_gaba * rms * (1.0 - gg) - gg * self._inv_tau_gaba)
 
     def _conductanceSum(self):
         if self.glutamatergic:
@@ -197,3 +220,5 @@ class RateAxon:
             self.weight = 0.0
             self.plasticity = False
             self.pruned = True
+        # Weight changed -> refresh the cached effective weight.
+        self._recomputeEffWeight()

@@ -122,6 +122,12 @@ class NormalizedMixtureNeuron(RateNeuron):
         # Last step's per-stream RAW currents (before weighting/normalization),
         # recorded for metrics/plots and the normalization self-check.
         self.lastStreamCurrent = {STREAM_BOTTOMUP: 0.0, STREAM_TOPDOWN: 0.0, STREAM_SELF: 0.0}
+        # Last step's RAW current per SOURCE population. The bottom-up stream
+        # lumps visual and cross-modal audio together (both are ascending, so
+        # both carry the bottom-up weight); this finer breakdown lets an
+        # experiment read the audio (cross-modal) drive separately as the
+        # remapping readout without changing the mixture's stream weighting.
+        self.lastSourceCurrent = {}
 
     def assignStream(self, sourcePopulation, stream):
         if stream not in STREAMS:
@@ -143,6 +149,7 @@ class NormalizedMixtureNeuron(RateNeuron):
             stream = self.sourceStream.get(srcPop, STREAM_BOTTOMUP)
             streamCurrent[stream] += current
         self.lastStreamCurrent = streamCurrent
+        self.lastSourceCurrent = dict(self.synapticInputBySource)
         w_bu, w_td, w_self = self.effectiveStreamWeights()
         wsum = w_bu + w_td + w_self
         if wsum <= 0.0:
