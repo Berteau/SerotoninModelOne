@@ -44,12 +44,20 @@ def plot_experiment(sim, control, outdir, title_prefix):
     # --- Panel 1: rates ---
     fig, ax = plt.subplots(figsize=(9, 4))
     ax.plot(t, smooth(sim.rateDeprived, win, tau), color="C3", label="deprived V1 (plasticity)")
-    ax.plot(t, smooth(sim.rateIntact, win, tau), color="C0", label="intact V1 (plasticity)")
+    # Intact columns only exist when the lesion spares part of the field (a
+    # scotoma). Under full blindness every column is deprived, so the intact
+    # series is all-NaN -- skip it (and its legend entry) rather than draw a
+    # phantom line.
+    intact = np.asarray(sim.rateIntact, dtype=float)
+    has_intact = np.any(np.isfinite(intact))
+    if has_intact:
+        ax.plot(t, smooth(sim.rateIntact, win, tau), color="C0", label="intact V1 (plasticity)")
     if control is not None:
         ax.plot(t, smooth(control.rateDeprived, win, tau), color="C3", ls="--",
-                label="deprived V1 (control, no plasticity)")
+                label="deprived V1 (control; == plasticity until 5HT epoch)")
     ax.set_xlabel("Time (ms)"); ax.set_ylabel("V1 firing rate (Hz)")
-    ax.set_title("%s: V1 firing rate, deprived vs intact columns" % title_prefix)
+    title_tail = "deprived vs intact columns" if has_intact else "deprived columns (no intact columns under full blindness)"
+    ax.set_title("%s: V1 firing rate, %s" % (title_prefix, title_tail))
     _epoch_labels(ax, sim); ax.legend(fontsize="small")
     fig.tight_layout()
     p = os.path.join(outdir, "rates.png"); fig.savefig(p, dpi=110); plt.close(fig); paths.append(p)
