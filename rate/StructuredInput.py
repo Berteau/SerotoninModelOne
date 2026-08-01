@@ -1,3 +1,5 @@
+import os
+
 import numpy as np
 from scipy.ndimage import sobel
 
@@ -85,7 +87,17 @@ class StructuredInputSet:
         self.minRateHz = minRateHz
         self.maxRateHz = maxRateHz
         self.rng = np.random.RandomState(seed)
-        self.stimuli = [self._make_stimulus(c) for c in range(classCount)]
+        self.stimuli = [self._make_stimulus(label, grid)
+                        for (label, grid) in self._prototype_grids()]
+
+    # ---- prototype source (override for real images) ----
+
+    def _prototype_grids(self):
+        # (label, raw greyscale G x G grid in [0,1]) pairs. The base class
+        # synthesizes class-distinct patterns; ImageFolderInputSet overrides this
+        # to load real labeled images. Edge detection and the r=0.25 audio
+        # construction happen downstream in _make_stimulus, identically for both.
+        return [(c, self._class_image(c)) for c in range(self.classCount)]
 
     # ---- stimulus construction ----
 
@@ -128,8 +140,8 @@ class StructuredInputSet:
         a_std = r * z_v + np.sqrt(1.0 - r * r) * e_perp
         return _minmax01(a_std)
 
-    def _make_stimulus(self, label):
-        edges = self._edge_detect(self._class_image(label))
+    def _make_stimulus(self, label, rawImage):
+        edges = self._edge_detect(rawImage)
         audio = self._correlated_audio(edges.reshape(-1))
         return StructuredAVStimulus(label, edges, audio)
 
@@ -153,3 +165,65 @@ class StructuredInputSet:
         if v_pooled.std() == 0 or stimulus.audio.std() == 0:
             return float("nan")
         return float(np.corrcoef(v_pooled, stimulus.audio)[0, 1])
+
+
+IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg", ".bmp", ".gif", ".tif", ".tiff", ".webp")
+
+
+def load_image_grid(path, gridSize):
+    """Load an image file as a greyscale G x G grid in [0, 1].
+
+    Uses Pillow (already required by matplotlib). The image is converted to
+    luminance and resized to the retinotopic grid; edge detection and the
+    r=0.25 audio pairing are applied downstream, identically to synthetic input.
+    """
+    from PIL import Image
+    img = Image.open(path).convert("L").resize((gridSize, gridSize))
+    return np.asarray(img, dtype=float) / 255.0
+
+
+class ImageFolderInputSet(StructuredInputSet):
+    """StructuredInputSet sourced from a folder of labeled images.
+
+    Expects `root` to contain one subfolder per class (e.g. person/, horse/);
+    subfolder names sorted alphabetically become the class labels 0..K-1. Up to
+    imagesPerClass images are loaded per class (deterministically, sorted by
+    filename). Everything downstream -- Sobel edge detection, the exact r=0.25
+    audio pairing, rate conversion -- is inherited unchanged, so the real-image
+    stimuli are drop-in compatible with the retinotopic experiment and the
+    self-check's correlation guarantee.
+
+    self.stimuli is a flat list ordered by (class, image); self.classNames maps
+    label index -> folder name. The sensory-loss experiment uses stimuli[0].
+    """
+
+    def __init__(self, root, gridSize=10, audioBins=20, imagesPerClass=1,
+                 minRateHz=0.0, maxRateHz=30.0, seed=0):
+        self.root = root
+        self.imagesPerClass = imagesPerClass
+        self.classNames, self._loadedGrids = self._loadGrids(root, gridSize, imagesPerClass)
+        super().__init__(gridSize=gridSize, audioBins=audioBins,
+                         classCount=len(self.classNames),
+                         minRateHz=minRateHz, maxRateHz=maxRateHz, seed=seed)
+
+    def _loadGrids(self, root, gridSize, imagesPerClass):
+        classDirs = sorted(d for d in os.listdir(root)
+                           if os.path.isdir(os.path.join(root, d)))
+        if not classDirs:
+            raise ValueError("No class subfolders found under %r" % root)
+        classNames = []
+        grids = []   # list of (label, grid01)
+        for label, name in enumerate(classDirs):
+            classNames.append(name)
+            d = os.path.join(root, name)
+            files = sorted(f for f in os.listdir(d)
+                           if f.lower().endswith(IMAGE_EXTENSIONS))
+            if not files:
+                raise ValueError("No images in class folder %r" % d)
+            for f in files[:imagesPerClass]:
+                grids.append((label, load_image_grid(os.path.join(d, f), gridSize)))
+        return classNames, grids
+
+    def _prototype_grids(self):
+        return self._loadedGrids
+
