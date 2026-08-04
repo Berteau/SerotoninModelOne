@@ -50,10 +50,17 @@ def buildGrandPlanParams(gridSize=10, cellsPerColumn=8, categoryCount=2):
     params["fsToV1Weight"] = -300.0          # self loop: FS -> V1 inhibition
     params["categoryToV1Weight"] = 400.0     # top-down: Category -> V1 feedback
 
-    # --- secondary competitive classifier ---
+    # --- secondary competitive classifier (first-pass, used when useART=False) ---
     params["v1ToCategoryWeight"] = 500.0     # feedforward pooling V1 -> Category
     params["categoryInhibitionWeight"] = -50.0   # winner-take-all lateral inhibition
     params["categoryVigilance"] = 5.0        # reject threshold (Hz); below -> no category wins
+
+    # --- ART secondary area (used when useART=True) ---
+    params["useART"] = False                 # opt-in: Fuzzy ART classifier drives top-down
+    params["artVigilance"] = 0.75            # ART vigilance rho (reject threshold)
+    params["artActivityFloor"] = 0.05        # feature-mean floor below which -> reject
+    params["artReferenceRate"] = 6.0         # V1 Hz mapping to feature value 1.0
+    params["topDownDriveHz"] = 30.0          # Hz that template value 1.0 projects back as
 
     # --- plasticity (audio remapping synapses), reusing the validated rule ---
     # Tuned (with audioWeight/ceiling) so the potentiated cross-modal drive is

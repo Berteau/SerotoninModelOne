@@ -1,9 +1,12 @@
 from random import random, gauss
 
+import numpy as np
+
 from rate.RatePopulation import RatePopulation
 from rate.NormalizedMixtureNeuron import (
     NormalizedMixtureNeuron, STREAM_BOTTOMUP, STREAM_TOPDOWN, STREAM_SELF)
 from rate.RateDiffuseReceptor import RateSomaticReceptorFactory, RateAxonalReceptorFactory
+from rate.ARTClassifier import REJECT
 
 '''
 Retinotopic grand-plan architecture (rate-based), with the primary visual area
@@ -64,6 +67,20 @@ class RetinotopicGrandPlanNetwork:
         self.categoryCount = params["categoryCount"]
         self.populations = {}
 
+        # Secondary area: either the first-pass competitive Category layer, or
+        # (useART) a Fuzzy ART classifier that reads the V1 map and drives a
+        # per-column TopDown input population with the winning category's
+        # template (content-specific feedback; zero on reject).
+        self.useART = bool(params.get("useART", False))
+        self.art = None
+        self.artActive = False
+        # V1 column rate (Hz) that maps to feature value 1.0 when normalizing the
+        # V1 map into the ART [0,1] feature space; and the Hz the top-down
+        # template's value 1.0 projects back as.
+        self.artReferenceRate = float(params.get("artReferenceRate", 6.0))
+        self.topDownDriveHz = float(params.get("topDownDriveHz", params["maxRateHz"]))
+        self.lastART = {"label": None, "reject": True, "match": 0.0, "category": None}
+
         transmitters = {"5HT2A": params["serotoninLevel"], "5HT1A": params["serotoninLevel"]}
         somaP = [RateSomaticReceptorFactory("5HT2A", params["Somatic5HT2AWeight"]),
                  RateSomaticReceptorFactory("5HT1A", params["Somatic5HT1AWeight"])]
@@ -95,9 +112,15 @@ class RetinotopicGrandPlanNetwork:
         # current, so we do not report that metric for V1 (see NormalizedMixtureNeuron).
         p["V1pyr"].trackInfluence = False
 
-        # ---- secondary area: competitive classifier ----
-        p["Category"] = RatePopulation(tau, "Pyramidal", self.categoryCount,
-                                       somaP, transmitters, self, "Category")
+        # ---- secondary area ----
+        if self.useART:
+            # Per-column top-down input population driven by the ART classifier.
+            p["TopDown"] = RatePopulation(tau, None, self.nCols, [], {}, self, "TopDown",
+                                          isInput=True, inputRate=0.0)
+        else:
+            # First-pass competitive classifier.
+            p["Category"] = RatePopulation(tau, "Pyramidal", self.categoryCount,
+                                           somaP, transmitters, self, "Category")
 
         # Cache each cell's index within its population so the connectivity weight
         # functions are O(1) rather than O(n) (cells.index) inside the O(n^2) build.
@@ -179,44 +202,59 @@ class RetinotopicGrandPlanNetwork:
             return None
         p["V1fs"].addOutboundConnections(p["V1pyr"], fsToV1)
 
-        # Feedforward pooling into the secondary area: all V1pyr -> each Category
-        # cell (the classifier reads the whole V1 map). Templates (per-category
-        # selectivity) live in the weight sign/magnitude; here a mild positive
-        # pooling weight, refined by template assignment in setCategoryTemplates.
-        def v1ToCategory(source, target):
-            w = params["v1ToCategoryWeight"] / (self.nCols * cpc)
-            return gauss(w, abs(w) / 10)
-        p["V1pyr"].addOutboundConnections(p["Category"], v1ToCategory)
-
-        # Lateral competition among Category cells (winner-take-all via mutual
-        # inhibition): each category inhibits the others.
-        def categoryCompetition(source, target):
-            if source is not target:
-                w = params["categoryInhibitionWeight"]
+        if self.useART:
+            # Top-down feedback: TopDown column c -> V1pyr cells in column c.
+            # The ART classifier sets TopDown column rates each step to the
+            # winning category's template (retinotopic, content-specific).
+            def topDownToV1(source, target):
+                if source._idx == self._colOf(target._idx, cpc):
+                    w = params["categoryToV1Weight"] / cpc
+                    return gauss(w, abs(w) / 10)
+                return None
+            p["TopDown"].addOutboundConnections(p["V1pyr"], topDownToV1)
+        else:
+            # Feedforward pooling into the secondary area: all V1pyr -> each
+            # Category cell (the classifier reads the whole V1 map).
+            def v1ToCategory(source, target):
+                w = params["v1ToCategoryWeight"] / (self.nCols * cpc)
                 return gauss(w, abs(w) / 10)
-            return None
-        p["Category"].addOutboundConnections(p["Category"], categoryCompetition)
+            p["V1pyr"].addOutboundConnections(p["Category"], v1ToCategory)
 
-        # Top-down feedback: Category -> V1pyr. The winning category projects its
-        # template back onto V1 as the top-down stream.
-        def categoryToV1(source, target):
-            w = params["categoryToV1Weight"] / self.categoryCount
-            return gauss(w, abs(w) / 10)
-        p["Category"].addOutboundConnections(p["V1pyr"], categoryToV1)
+            # Lateral competition among Category cells (winner-take-all).
+            def categoryCompetition(source, target):
+                if source is not target:
+                    w = params["categoryInhibitionWeight"]
+                    return gauss(w, abs(w) / 10)
+                return None
+            p["Category"].addOutboundConnections(p["Category"], categoryCompetition)
+
+            # Top-down feedback: Category -> V1pyr.
+            def categoryToV1(source, target):
+                w = params["categoryToV1Weight"] / self.categoryCount
+                return gauss(w, abs(w) / 10)
+            p["Category"].addOutboundConnections(p["V1pyr"], categoryToV1)
 
     def _assignV1Streams(self):
         # Tag each V1 pyramidal's inbound source populations into Sulfaro streams.
         p = self.populations
+        topDownPop = p["TopDown"] if self.useART else p["Category"]
         streamByPop = {
             p["VisualInput"]: STREAM_BOTTOMUP,
             p["AudioInput"]: STREAM_BOTTOMUP,   # cross-modal ascending drive
             p["V1pyr"]: STREAM_SELF,            # recurrent excitation
             p["V1fs"]: STREAM_SELF,             # local inhibition (current-layer)
-            p["Category"]: STREAM_TOPDOWN,      # descending feedback
+            topDownPop: STREAM_TOPDOWN,         # descending feedback
         }
         for cell in p["V1pyr"].cells:
             for srcPop, stream in streamByPop.items():
                 cell.assignStream(srcPop, stream)
+
+    def _serotoninTargets(self):
+        # Populations carrying somatic serotonin receptors (exclude input pops).
+        keys = ["V1pyr", "V1fs"]
+        if not self.useART:
+            keys.append("Category")
+        return keys
 
     # ---- runtime controls ----
 
@@ -240,14 +278,14 @@ class RetinotopicGrandPlanNetwork:
 
     def setSerotonin(self, level):
         transmitters = {"5HT2A": level, "5HT1A": level}
-        for key in ("V1pyr", "V1fs", "Category"):
+        for key in self._serotoninTargets():
             self.populations[key].setDiffuseTransmitters(dict(transmitters))
 
     def set5HT2A(self, level):
         # Raise only 5HT2A (pharmacological / agonist), 5HT1A at baseline.
         base = self.params["serotoninLevel"]
         transmitters = {"5HT2A": level, "5HT1A": base}
-        for key in ("V1pyr", "V1fs", "Category"):
+        for key in self._serotoninTargets():
             self.populations[key].setDiffuseTransmitters(dict(transmitters))
 
     def setV1BottomUpGain(self, gain):
@@ -260,8 +298,88 @@ class RetinotopicGrandPlanNetwork:
         # The cross-modal AudioInput -> V1pyr synapses (analogue of S_B -> P_A).
         return self.populations["AudioInput"].outboundAxonsTo(self.populations["V1pyr"])
 
+    # ---- ART secondary area ----
+
+    def v1ColumnRates(self):
+        # Per-column mean V1 pyramidal rate (Hz), length nCols.
+        cpc = self.cellsPerColumn
+        cells = self.populations["V1pyr"].cells
+        return np.array([np.mean([cells[c * cpc + k].rate for k in range(cpc)])
+                         for c in range(self.nCols)])
+
+    def v1FeatureVector(self):
+        # Normalize the V1 column-rate map into the ART [0,1] feature space by a
+        # FIXED reference rate (not a per-pattern max), so overall activity level
+        # is meaningful: a globally suppressed (deprived) map yields low feature
+        # values -> rejected by the ART activity gate, while a serotonin-inflated
+        # map yields high values -> can be classified (a hallucination readout).
+        return np.clip(self.v1ColumnRates() / self.artReferenceRate, 0.0, 1.0)
+
+    def attachART(self, art):
+        self.art = art
+
+    def setARTActive(self, active):
+        # When active, ART reads V1 and drives TopDown each step. Kept off during
+        # classifier pre-training so V1 is purely bottom-up driven.
+        self.artActive = bool(active)
+        if not active:
+            for cell in self.populations["TopDown"].cells:
+                cell.setRate(0.0)
+
+    def updateTopDownFromART(self):
+        # ART reads the current V1 feature, classifies, and drives the TopDown
+        # population with the winning category's template (0 on reject).
+        x = self.v1FeatureVector()
+        label, (cat, match) = self.art.classify(x, return_detail=True)
+        reject = (label == REJECT) or (cat is None)
+        if reject:
+            template = np.zeros(self.nCols)
+        else:
+            template = self.art.category_template(cat)   # [0,1]^nCols
+        rates = template * self.topDownDriveHz
+        for cell, r in zip(self.populations["TopDown"].cells, rates):
+            cell.setRate(float(r))
+        self.lastART = {"label": None if reject else label,
+                        "reject": bool(reject), "match": float(match), "category": cat}
+
+    def resetActivity(self):
+        # Zero all firing rates, conductances, and synaptic accumulators, for a
+        # clean presentation (used between ART training images).
+        for pop in self.populations.values():
+            for cell in pop.cells:
+                cell.rate = 0.0
+                if hasattr(cell, "clearSynapticAccumulators"):
+                    cell.clearSynapticAccumulators()
+            for axon in pop.outboundAxons:
+                axon.g_ampa = axon.g_nmda = axon.g_gaba = 0.0
+
     def step(self):
+        if self.useART and self.art is not None and self.artActive:
+            self.updateTopDownFromART()
         for population in self.populations.values():
             population.stepCells()
         for population in self.populations.values():
             population.stepOutputs()
+
+
+def pretrainART(network, inputSet, art, settleMs):
+    """Train the ART classifier on the V1 representations of the labeled stimuli.
+
+    Each stimulus is presented (top-down inactive, so V1 is purely bottom-up
+    driven), V1 is settled for settleMs, and ART learns (V1 feature -> label).
+    The classifier is thus trained on the actual V1 activity patterns it will
+    later classify, not on the raw edge images. Attaches the trained ART to the
+    network but leaves it inactive; the caller enables it with setARTActive(True).
+    """
+    tau = network.tau
+    network.setARTActive(False)
+    steps = int(round(settleMs / tau))
+    for st in inputSet.stimuli:
+        network.resetActivity()
+        network.setVisualRates(inputSet.visualRates(st))
+        network.setAudioRates(inputSet.audioRates(st))
+        for _ in range(steps):
+            network.step()
+        art.train_one(network.v1FeatureVector(), st.label)
+    network.attachART(art)
+    return art
