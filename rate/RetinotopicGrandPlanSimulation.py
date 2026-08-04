@@ -1,7 +1,8 @@
 import numpy as np
 
-from rate.RetinotopicGrandPlanNetwork import RetinotopicGrandPlanNetwork
+from rate.RetinotopicGrandPlanNetwork import RetinotopicGrandPlanNetwork, pretrainART
 from rate.NormalizedMixtureNeuron import STREAM_TOPDOWN
+from rate.ARTClassifier import FuzzyART, REJECT
 
 '''
 Sensory-loss experiment on the retinotopic grand-plan architecture, mirroring
@@ -62,7 +63,19 @@ class RetinotopicGrandPlanSimulation:
         self.stimulus = stimulus
         self.remapping = self.network.audioRemappingAxons()   # AudioInput -> V1pyr
 
+        # If the secondary area is ART, build and pre-train the classifier on the
+        # V1 representations of the labeled stimuli, then activate it. Done before
+        # presenting the experiment stimulus so training sees clean bottom-up V1.
+        self.art = None
+        if self.network.useART:
+            self.art = FuzzyART(dim=self.network.nCols, vigilance=params["artVigilance"],
+                                alpha=0.01, beta=1.0, activity_floor=params["artActivityFloor"])
+            pretrainART(self.network, inputSet, self.art,
+                        settleMs=params.get("artPretrainSettleMs", 200.0))
+            self.network.setARTActive(True)
+
         # Present the stimulus (held fixed across epochs; only the mask changes).
+        self.network.resetActivity()
         self.network.setVisualRates(inputSet.visualRates(stimulus))
         self.network.setAudioRates(inputSet.audioRates(stimulus))
 
@@ -87,6 +100,12 @@ class RetinotopicGrandPlanSimulation:
         self.topDownCurrent = []
         self.remapWeight = []
         self.v1MapsByEpoch = {}   # epoch index -> G x G V1 column-rate snapshot
+        # ART decision time series (only populated when useART). artClass encodes
+        # the decision numerically: the class label, or REJECT (-1) on reject.
+        self.artClass = []
+        self.artReject = []
+        self.artMatch = []
+        self.trueLabel = stimulus.label
 
         self._audioPop = self.network.populations["AudioInput"]
         self._visualPop = self.network.populations["VisualInput"]
@@ -155,6 +174,11 @@ class RetinotopicGrandPlanSimulation:
         self.visualCurrent.append(np.mean([c.lastSourceCurrent.get(self._visualPop, 0.0) for c in sc]) if sc else float("nan"))
         self.topDownCurrent.append(np.mean([c.lastStreamCurrent[STREAM_TOPDOWN] for c in sc]) if sc else float("nan"))
         self.remapWeight.append(float(np.mean([a.weight for a in self.remapping])) if self.remapping else float("nan"))
+        if self.network.useART:
+            d = self.network.lastART
+            self.artReject.append(bool(d["reject"]))
+            self.artClass.append(REJECT if d["reject"] else int(d["label"]))
+            self.artMatch.append(float(d["match"]))
 
     # ---- run ----
 
@@ -167,7 +191,8 @@ class RetinotopicGrandPlanSimulation:
     def _resetRecords(self):
         self.epochBoundaries = []
         for key in ("rateDeprived", "rateIntact", "audioCurrent",
-                    "visualCurrent", "topDownCurrent", "remapWeight"):
+                    "visualCurrent", "topDownCurrent", "remapWeight",
+                    "artClass", "artReject", "artMatch"):
             setattr(self, key, [])
 
     def v1ColumnMap(self):

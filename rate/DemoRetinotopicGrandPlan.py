@@ -57,6 +57,29 @@ def summarize(mode, sim, control):
     row("audio I (ctrl)", emc["audioCurrent"])
     row("rate depr (ctrl)", emc["rateDeprived"])
 
+    if getattr(sim, "artMatch", None):
+        import numpy as np
+        names = getattr(sim.inputSet, "classNames", None)
+        tau = sim.tau; dur = sim.epochDurationMs
+        def decode(e):
+            s = int(e * dur / tau); en = int((e + 1) * dur / tau)
+            cls = np.asarray(sim.artClass[s:en]); mt = np.asarray(sim.artMatch[s:en])
+            if len(cls) == 0:
+                return "n/a"
+            rej = np.mean(cls < 0)
+            # modal non-reject class
+            nonrej = cls[cls >= 0]
+            if len(nonrej):
+                vals, cnts = np.unique(nonrej, return_counts=True)
+                modal = int(vals[np.argmax(cnts)])
+                mname = names[modal] if names else str(modal)
+            else:
+                mname = "-"
+            return "%s rej%2.0f%% m%.2f" % (mname, 100 * rej, np.nanmean(mt))
+        true = sim.inputSet.classNames[sim.trueLabel] if names else str(sim.trueLabel)
+        print("  %-16s " % ("ART (true=%s)" % true)
+              + " ".join("%10s" % decode(e) for e in range(4)))
+
 
 def main():
     ap = argparse.ArgumentParser()
@@ -69,17 +92,23 @@ def main():
                     help="root folder of labeled image subfolders (person/ horse/); "
                          "if omitted, synthetic class-distinct patterns are used")
     ap.add_argument("--stamp", default=None, help="output subdir name (default: UTC timestamp)")
+    ap.add_argument("--art", action="store_true",
+                    help="use the Fuzzy ART secondary area (classify/reject + content-specific top-down)")
     args = ap.parse_args()
 
     params = buildGrandPlanParams(gridSize=args.grid, cellsPerColumn=args.cpc, categoryCount=2)
     params["epochDurationMs"] = args.epoch
     params["warmupMs"] = args.warmup
+    params["useART"] = args.art
 
     if args.images:
+        # Load several exemplars per class so the ART classifier has something to
+        # learn; the experiment itself uses stimuli[0] as the held stimulus.
         data = ImageFolderInputSet(args.images, gridSize=args.grid, audioBins=params["audioBins"],
-                                   imagesPerClass=1, seed=0,
+                                   imagesPerClass=5, seed=0,
                                    minRateHz=params["minRateHz"], maxRateHz=params["maxRateHz"])
-        print("Using real images from %s: classes %s" % (args.images, data.classNames))
+        print("Using real images from %s: classes %s (%d exemplars)"
+              % (args.images, data.classNames, len(data.stimuli)))
     else:
         data = StructuredInputSet(gridSize=args.grid, audioBins=params["audioBins"],
                                   classCount=2, seed=0,

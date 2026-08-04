@@ -92,7 +92,52 @@ def plot_experiment(sim, control, outdir, title_prefix):
     if p is not None:
         paths.append(p)
 
+    # --- Panel 5: ART classifier readout (only when the ART secondary area ran) ---
+    if getattr(sim, "artMatch", None):
+        p = plot_art(sim, outdir, title_prefix)
+        if p is not None:
+            paths.append(p)
+
     return paths
+
+
+def plot_art(sim, outdir, title_prefix):
+    # ART secondary-area readout over the experiment: the one-hot decision
+    # (class vs reject) and the match/confidence, so hallucination (confident
+    # classification without veridical input) and recovery are visible.
+    tau = sim.tau
+    cls = np.asarray(sim.artClass, dtype=float)     # class label, or -1 (reject)
+    match = np.asarray(sim.artMatch, dtype=float)
+    t = np.arange(len(cls)) * tau
+    classNames = getattr(sim.inputSet, "classNames", None)
+    true_lbl = getattr(sim, "trueLabel", None)
+
+    fig, (axd, axm) = plt.subplots(2, 1, figsize=(9, 5), sharex=True,
+                                   gridspec_kw={"height_ratios": [1, 1.4]})
+    # Decision strip: reject at -1, classes at 0,1,...
+    axd.plot(t, cls, color="0.3", lw=1.0, drawstyle="steps-post")
+    axd.scatter(t[::50], cls[::50], c=["0.6" if v < 0 else ("C2" if v == true_lbl else "C3")
+                                       for v in cls[::50]], s=8, zorder=3)
+    if true_lbl is not None:
+        axd.axhline(true_lbl, color="C2", ls=":", lw=1, label="true class")
+    ncls = (len(classNames) if classNames else int(np.nanmax(cls)) + 1)
+    axd.set_yticks([-1] + list(range(ncls)))
+    axd.set_yticklabels(["reject"] + (classNames if classNames else [str(i) for i in range(ncls)]))
+    axd.set_ylabel("ART decision"); axd.set_ylim(-1.5, ncls - 0.5)
+    epoch_lines(axd, sim.epochBoundaries); axd.legend(fontsize="small", loc="upper right")
+    axd.set_title("%s: ART secondary-area readout (classify / reject)" % title_prefix)
+
+    axm.plot(t, match, color="C0", label="match / confidence")
+    vig = sim.params.get("artVigilance", None)
+    if vig is not None:
+        axm.axhline(vig, color="C3", ls="--", lw=1, label="vigilance (reject below)")
+    axm.set_ylabel("ART match"); axm.set_xlabel("Time (ms)"); axm.set_ylim(0, 1)
+    epoch_lines(axm, sim.epochBoundaries); axm.legend(fontsize="small", loc="lower right")
+
+    fig.tight_layout()
+    path = os.path.join(outdir, "art_readout.png")
+    fig.savefig(path, dpi=110); plt.close(fig)
+    return path
 
 
 def plot_maps(sim, outdir, title_prefix):
