@@ -11,7 +11,7 @@ import numpy as np
 
 from rate.RetinotopicGrandPlanParams import buildGrandPlanParams
 from rate.RetinotopicGrandPlanSimulation import RetinotopicGrandPlanSimulation
-from rate.StructuredInput import StructuredInputSet
+from rate.StructuredInput import StructuredInputSet, ImageFolderInputSet
 from rate.plotting_grandplan import plot_experiment, epoch_means, EPOCH_LABELS
 
 '''
@@ -65,18 +65,28 @@ def main():
     ap.add_argument("--epoch", type=int, default=500)
     ap.add_argument("--warmup", type=int, default=200)
     ap.add_argument("--mode", choices=["both", "scotoma", "blind"], default="both")
+    ap.add_argument("--images", default=None,
+                    help="root folder of labeled image subfolders (person/ horse/); "
+                         "if omitted, synthetic class-distinct patterns are used")
+    ap.add_argument("--stamp", default=None, help="output subdir name (default: UTC timestamp)")
     args = ap.parse_args()
 
     params = buildGrandPlanParams(gridSize=args.grid, cellsPerColumn=args.cpc, categoryCount=2)
     params["epochDurationMs"] = args.epoch
     params["warmupMs"] = args.warmup
 
-    data = StructuredInputSet(gridSize=args.grid, audioBins=params["audioBins"],
-                              classCount=2, seed=0,
-                              minRateHz=params["minRateHz"], maxRateHz=params["maxRateHz"])
+    if args.images:
+        data = ImageFolderInputSet(args.images, gridSize=args.grid, audioBins=params["audioBins"],
+                                   imagesPerClass=1, seed=0,
+                                   minRateHz=params["minRateHz"], maxRateHz=params["maxRateHz"])
+        print("Using real images from %s: classes %s" % (args.images, data.classNames))
+    else:
+        data = StructuredInputSet(gridSize=args.grid, audioBins=params["audioBins"],
+                                  classCount=2, seed=0,
+                                  minRateHz=params["minRateHz"], maxRateHz=params["maxRateHz"])
     stim = data.stimuli[0]
 
-    stamp = datetime.utcnow().isoformat()
+    stamp = args.stamp or datetime.utcnow().isoformat()
     modes = ["scotoma", "blind"] if args.mode == "both" else [args.mode]
 
     for mode in modes:
