@@ -72,6 +72,12 @@ class RetinotopicGrandPlanSimulation:
         self.deprivedColumns = self._deprivedColumns(self.silencedColumns)
         self.deprivedCells, self.intactCells = self._partitionV1Cells()
 
+        # Retinotopic geometry for plotting.
+        G = self.network.G
+        self.inputGrid = np.asarray(stimulus.visualGrid, dtype=float)
+        self.silencedMap = np.array(self.silencedColumns).reshape(G, G)
+        self.deprivedMap = np.array(self.deprivedColumns).reshape(G, G)
+
         # Records
         self.epochBoundaries = []
         self.rateDeprived = []
@@ -80,6 +86,7 @@ class RetinotopicGrandPlanSimulation:
         self.visualCurrent = []
         self.topDownCurrent = []
         self.remapWeight = []
+        self.v1MapsByEpoch = {}   # epoch index -> G x G V1 column-rate snapshot
 
         self._audioPop = self.network.populations["AudioInput"]
         self._visualPop = self.network.populations["VisualInput"]
@@ -163,8 +170,20 @@ class RetinotopicGrandPlanSimulation:
                     "visualCurrent", "topDownCurrent", "remapWeight"):
             setattr(self, key, [])
 
+    def v1ColumnMap(self):
+        # G x G map of per-column mean V1 pyramidal rate (retinotopic snapshot).
+        G = self.network.G
+        cpc = self.network.cellsPerColumn
+        cells = self.network.populations["V1pyr"].cells
+        m = np.array([np.mean([cells[c * cpc + k].rate for k in range(cpc)])
+                      for c in range(G * G)])
+        return m.reshape(G, G)
+
     def _endEpoch(self, epoch):
         self.epochBoundaries.append(self.epochDurationMs * epoch)
+        # Retinotopic V1 snapshot at the end of this epoch, so we can show the
+        # deprived region darken at loss and partially re-light after remapping.
+        self.v1MapsByEpoch[epoch] = self.v1ColumnMap()
 
     def warmup(self):
         self._stepFor(self.warmupMs, record=False)

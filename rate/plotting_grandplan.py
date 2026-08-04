@@ -87,7 +87,55 @@ def plot_experiment(sim, control, outdir, title_prefix):
     fig.tight_layout()
     p = os.path.join(outdir, "remap_weight.png"); fig.savefig(p, dpi=110); plt.close(fig); paths.append(p)
 
+    # --- Panel 4: retinotopic V1 maps (edge input + per-epoch V1 activity) ---
+    p = plot_maps(sim, outdir, title_prefix)
+    if p is not None:
+        paths.append(p)
+
     return paths
+
+
+def plot_maps(sim, outdir, title_prefix):
+    # Edge-detected input + per-epoch V1 column-rate maps, with the lesion
+    # outlined, so the deprived region visibly darkens at loss and partially
+    # re-lights after cross-modal remapping.
+    if not sim.v1MapsByEpoch:
+        return None
+    epochs = sorted(sim.v1MapsByEpoch)
+    maps = [sim.v1MapsByEpoch[e] for e in epochs]
+    vmax = max(1e-6, max(float(np.nanmax(m)) for m in maps))
+    n = len(epochs) + 1
+    fig, axes = plt.subplots(1, n, figsize=(3.2 * n, 3.4))
+    axes[0].imshow(sim.inputGrid, cmap="magma")
+    axes[0].set_title("edge input (V1 bottom-up)", fontsize=9)
+    for ax, e, m in zip(axes[1:], epochs, maps):
+        im = ax.imshow(m, cmap="viridis", vmin=0, vmax=vmax)
+        ax.set_title("V1 rate: %s" % EPOCH_LABELS[e - 1], fontsize=9)
+        _outline_lesion(ax, sim.silencedMap)
+    for ax in axes:
+        ax.set_xticks([]); ax.set_yticks([])
+    fig.colorbar(im, ax=axes.tolist(), fraction=0.02, pad=0.01, label="Hz")
+    fig.suptitle("%s: retinotopic V1 activity across epochs (lesion outlined)" % title_prefix)
+    path = os.path.join(outdir, "v1_maps.png")
+    fig.savefig(path, dpi=110); plt.close(fig)
+    return path
+
+
+def _outline_lesion(ax, silencedMap):
+    # Draw a thin outline around the silenced (lesioned) columns.
+    G = silencedMap.shape[0]
+    for y in range(G):
+        for x in range(G):
+            if not silencedMap[y, x]:
+                continue
+            if y == 0 or not silencedMap[y - 1, x]:
+                ax.plot([x - 0.5, x + 0.5], [y - 0.5, y - 0.5], color="red", lw=1.2)
+            if y == G - 1 or not silencedMap[y + 1, x]:
+                ax.plot([x - 0.5, x + 0.5], [y + 0.5, y + 0.5], color="red", lw=1.2)
+            if x == 0 or not silencedMap[y, x - 1]:
+                ax.plot([x - 0.5, x - 0.5], [y - 0.5, y + 0.5], color="red", lw=1.2)
+            if x == G - 1 or not silencedMap[y, x + 1]:
+                ax.plot([x + 0.5, x + 0.5], [y - 0.5, y + 0.5], color="red", lw=1.2)
 
 
 def epoch_means(sim):
