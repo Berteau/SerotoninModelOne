@@ -48,6 +48,11 @@ def main():
     ap.add_argument("--images", default=None)
     ap.add_argument("--gains", type=float, nargs="+", default=[1, 2, 4, 8])
     ap.add_argument("--settle", type=float, default=400.0, help="top-down render settle (ms)")
+    ap.add_argument("--render-label", type=int, default=None,
+                    help="force rendering this class label's category (skips the 4-epoch "
+                         "experiment; use when the return epoch rejects, as it does at 10x10)")
+    ap.add_argument("--images-per-class", type=int, default=5)
+    ap.add_argument("--pretrain-settle", type=float, default=200.0)
     ap.add_argument("--stamp", default=None)
     args = ap.parse_args()
 
@@ -56,10 +61,11 @@ def main():
     params["epochDurationMs"] = args.epoch
     params["warmupMs"] = args.warmup
     params["useART"] = True
+    params["artPretrainSettleMs"] = args.pretrain_settle
 
     if args.images:
         data = ImageFolderInputSet(args.images, gridSize=args.grid, audioBins=params["audioBins"],
-                                   imagesPerClass=5, seed=0,
+                                   imagesPerClass=args.images_per_class, seed=0,
                                    minRateHz=params["minRateHz"], maxRateHz=params["maxRateHz"])
         names = data.classNames
     else:
@@ -69,23 +75,36 @@ def main():
         names = [str(i) for i in range(2)]
     stim = data.stimuli[0]
 
-    print("Running %s ART experiment (grid=%d) to obtain the return-epoch percept..."
-          % (args.mode, args.grid))
+    # Build the simulation (this pre-trains the ART classifier on the V1
+    # representations). Run the 4-epoch experiment only when we need the
+    # return-epoch decision; skip it when a class label is forced.
     sim = RetinotopicGrandPlanSimulation(params, stim, data, mode=args.mode, plasticityEnabled=True)
-    sim.run()
     net, art = sim.network, sim.art
 
-    # Modal winning ART category during the return epoch (epoch index 3).
-    tau, dur = params["tau"], params["epochDurationMs"]
-    s, e = int(3 * dur / tau), int(4 * dur / tau)
-    cats = [c for c in sim.artCategory[s:e] if c is not None]
-    if not cats:
-        print("Return epoch rejected throughout; no stable percept to render.")
-        return
-    win = Counter(cats).most_common(1)[0][0]
-    winName = names[art.labels[win]]
-    print("Return-epoch percept: category %d = '%s' (true stimulus '%s')"
-          % (win, winName, names[stim.label]))
+    if args.render_label is not None:
+        cands = [j for j, lab in enumerate(art.labels) if lab == args.render_label]
+        if not cands:
+            print("No ART category with label %d." % args.render_label)
+            return
+        win = cands[0]
+        winName = names[art.labels[win]]
+        print("Rendering forced category %d = '%s' (skipping experiment); true stimulus '%s'"
+              % (win, winName, names[stim.label]))
+    else:
+        print("Running %s ART experiment (grid=%d) to obtain the return-epoch percept..."
+              % (args.mode, args.grid))
+        sim.run()
+        tau, dur = params["tau"], params["epochDurationMs"]
+        s, e = int(3 * dur / tau), int(4 * dur / tau)
+        cats = [c for c in sim.artCategory[s:e] if c is not None]
+        if not cats:
+            print("Return epoch rejected throughout; no stable percept to render.\n"
+                  "Re-run with --render-label to render a chosen class's percept directly.")
+            return
+        win = Counter(cats).most_common(1)[0][0]
+        winName = names[art.labels[win]]
+        print("Return-epoch percept: category %d = '%s' (true stimulus '%s')"
+              % (win, winName, names[stim.label]))
 
     template = art.category_template(win)
     percepts = [net.renderTopDownPercept(template, settleMs=args.settle, gain=g) for g in args.gains]
