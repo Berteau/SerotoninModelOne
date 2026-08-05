@@ -342,6 +342,64 @@ class RetinotopicGrandPlanNetwork:
         self.lastART = {"label": None if reject else label,
                         "reject": bool(reject), "match": float(match), "category": cat}
 
+    def renderTopDownPercept(self, template, settleMs, gain=1.0,
+                             disconnectBottomUp=True):
+        """Drive V1 with ONLY a top-down template and return the settled V1
+        column-rate map -- the percept that top-down feedback alone paints on V1.
+
+        template : per-column [0,1] pattern (e.g. an ART category template, from
+                   art.category_template(j)).
+        gain     : multiplies the top-down SYNAPTIC WEIGHT (a linear current
+                   boost) to show the hallucination under stronger-than-observed
+                   feedback influence. Note gain is applied to the weight, not the
+                   TopDown firing rate, because the synaptic conductance saturates
+                   in rate so rate scaling has little effect above ~30 Hz.
+        disconnectBottomUp : silence the visual+audio inputs AND remove the
+                   bottom-up stream from the V1 mixture (weight -> 0). This is
+                   Sulfaro's "sensory disconnection" scenario: with ascending
+                   input downweighted to zero, the normalized mixture renders the
+                   pure top-down (imagined/hallucinated) percept, undiluted by the
+                   empty bottom-up slot in the denominator.
+
+        All modified state (ART-active flag, input rates, bottom-up stream
+        weights, top-down axon weights) is restored before returning.
+        """
+        template = np.asarray(template, dtype=float)
+        wasActive = self.artActive
+        self.resetActivity()
+        self.setARTActive(False)   # hold TopDown fixed; also zeros it, so set AFTER
+
+        v1 = self.populations["V1pyr"].cells
+        saved_wbu = [c.streamWeights[STREAM_BOTTOMUP] for c in v1]
+        if disconnectBottomUp:
+            for cell in self.populations["VisualInput"].cells:
+                cell.setRate(0.0)
+            for cell in self.populations["AudioInput"].cells:
+                cell.setRate(0.0)
+            for c in v1:
+                c.streamWeights[STREAM_BOTTOMUP] = 0.0
+
+        tdAxons = self.populations["TopDown"].outboundAxons
+        saved_w = [a.weight for a in tdAxons]
+        for a in tdAxons:
+            a.weight *= gain
+            a._recomputeEffWeight()
+
+        rates = np.clip(template * self.topDownDriveHz, 0.0, None)
+        for cell, r in zip(self.populations["TopDown"].cells, rates):
+            cell.setRate(float(r))
+        for _ in range(int(round(settleMs / self.tau))):
+            self.step()               # artActive is False, so TopDown stays clamped
+        percept = self.v1ColumnRates().reshape(self.G, self.G)
+
+        # restore
+        for a, w in zip(tdAxons, saved_w):
+            a.weight = w; a._recomputeEffWeight()
+        for c, w in zip(v1, saved_wbu):
+            c.streamWeights[STREAM_BOTTOMUP] = w
+        self.artActive = wasActive
+        return percept
+
     def resetActivity(self):
         # Zero all firing rates, conductances, and synaptic accumulators, for a
         # clean presentation (used between ART training images).

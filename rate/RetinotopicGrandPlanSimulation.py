@@ -105,6 +105,7 @@ class RetinotopicGrandPlanSimulation:
         self.artClass = []
         self.artReject = []
         self.artMatch = []
+        self.artCategory = []     # winning ART category index per step (None on reject)
         self.trueLabel = stimulus.label
 
         self._audioPop = self.network.populations["AudioInput"]
@@ -179,6 +180,7 @@ class RetinotopicGrandPlanSimulation:
             self.artReject.append(bool(d["reject"]))
             self.artClass.append(REJECT if d["reject"] else int(d["label"]))
             self.artMatch.append(float(d["match"]))
+            self.artCategory.append(None if d["reject"] else int(d["category"]))
 
     # ---- run ----
 
@@ -192,7 +194,7 @@ class RetinotopicGrandPlanSimulation:
         self.epochBoundaries = []
         for key in ("rateDeprived", "rateIntact", "audioCurrent",
                     "visualCurrent", "topDownCurrent", "remapWeight",
-                    "artClass", "artReject", "artMatch"):
+                    "artClass", "artReject", "artMatch", "artCategory"):
             setattr(self, key, [])
 
     def v1ColumnMap(self):
