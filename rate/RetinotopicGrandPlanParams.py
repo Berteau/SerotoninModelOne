@@ -55,6 +55,15 @@ def buildGrandPlanParams(gridSize=10, cellsPerColumn=8, categoryCount=2):
     params["categoryInhibitionWeight"] = -50.0   # winner-take-all lateral inhibition
     params["categoryVigilance"] = 5.0        # reject threshold (Hz); below -> no category wins
 
+    # --- serotonin -> Sulfaro mixture coupling ---
+    # When on, raising 5HT2A lowers the V1 bottom-up stream weight (bottomUpGain),
+    # tipping the feedforward:feedback ratio toward feedback (Sulfaro/Seillier
+    # bridge). Supplements the existing somatic (additive) and axonal
+    # (transmission) serotonin effects. See _updateMixtureFromSerotonin.
+    params["serotoninShiftsMixture"] = True
+    params["bottomUpGainDamp"] = 0.2         # gain = 1 - damp*(L-base)/base
+    params["minBottomUpGain"] = 0.1          # floor on bottom-up gain
+
     # --- ART secondary area (used when useART=True) ---
     params["useART"] = False                 # opt-in: Fuzzy ART classifier drives top-down
     params["artVigilance"] = 0.75            # ART vigilance rho (reject threshold)

@@ -280,6 +280,7 @@ class RetinotopicGrandPlanNetwork:
         transmitters = {"5HT2A": level, "5HT1A": level}
         for key in self._serotoninTargets():
             self.populations[key].setDiffuseTransmitters(dict(transmitters))
+        self._updateMixtureFromSerotonin(level)
 
     def set5HT2A(self, level):
         # Raise only 5HT2A (pharmacological / agonist), 5HT1A at baseline.
@@ -287,10 +288,34 @@ class RetinotopicGrandPlanNetwork:
         transmitters = {"5HT2A": level, "5HT1A": base}
         for key in self._serotoninTargets():
             self.populations[key].setDiffuseTransmitters(dict(transmitters))
+        self._updateMixtureFromSerotonin(level)
+
+    def _updateMixtureFromSerotonin(self, level5ht2a):
+        # Sulfaro / Seillier-Michaiel neurochemical bridge: 5HT2A dampens V1's
+        # bottom-up gain, i.e. lowers the ascending stream weight in the
+        # normalized mixture (shifting the feedforward:feedback ratio toward
+        # feedback). This SUPPLEMENTS the somatic (additive) and axonal
+        # (transmission) serotonin effects; it is the only one that actually
+        # moves the Sulfaro competition. Opt-in via serotoninShiftsMixture.
+        #
+        #   bottomUpGain(L) = clamp(1 - damp * (L - baseline)/baseline, floor, 1)
+        #
+        # so gain = 1 at baseline serotonin and falls toward `floor` as 5HT2A
+        # rises. Note this partly opposes the axonal 5HT2A effect (which raises
+        # bottom-up *transmission*); they act on different quantities (stream
+        # weight vs axon efficacy) and coexist, as documented.
+        if not self.params.get("serotoninShiftsMixture", False):
+            return
+        base = self.params["serotoninLevel"]
+        damp = self.params.get("bottomUpGainDamp", 0.2)
+        floor = self.params.get("minBottomUpGain", 0.1)
+        gain = 1.0 - damp * max(0.0, (level5ht2a - base) / base)
+        gain = max(floor, min(1.0, gain))
+        self.setV1BottomUpGain(gain)
 
     def setV1BottomUpGain(self, gain):
-        # Sulfaro neurochemical bridge: scale the bottom-up stream weight on every
-        # V1 pyramidal (5HT2A dampening of bottom-up gain -> gain < 1).
+        # Scale the bottom-up stream weight on every V1 pyramidal. Called by the
+        # serotonin coupling above, and directly by analyses that sweep the gain.
         for cell in self.populations["V1pyr"].cells:
             cell.bottomUpGain = float(gain)
 
