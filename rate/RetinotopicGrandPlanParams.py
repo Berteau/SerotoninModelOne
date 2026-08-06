@@ -64,6 +64,20 @@ def buildGrandPlanParams(gridSize=10, cellsPerColumn=8, categoryCount=2):
     params["bottomUpGainDamp"] = 0.2         # gain = 1 - damp*(L-base)/base
     params["minBottomUpGain"] = 0.1          # floor on bottom-up gain
 
+    # --- "Realistic 5HT" phase-3 mechanism (opt-in) ---
+    # Literature-grounded reframing of the deafferentation serotonin response
+    # (5HT2A/3A modulation of deprived visual cortex + cross-modal input). When
+    # on, phase 3 does NOT raise a single uniform 5HT; instead, in the DEPRIVED
+    # region it (i) reduces somatic 5HT in visual cortex, (ii) raises V1 gain
+    # (disinhibition -> higher bottom-up stream weight), (iii) raises 5HT on the
+    # cross-modal audio->V1 transmission axons, and (iv) lowers the plasticity
+    # threshold. All four are consistent with 5HT2A/3A modulation.
+    params["realistic5HT"] = False
+    params["v1SerotoninDeprived"] = 2.0          # reduced somatic 5HT in deprived V1 (baseline 10)
+    params["v1BottomUpGainDeprived"] = 1.5       # raised gain (disinhibition) in deprived region
+    params["crossModalSerotoninLevel"] = 40.0    # raised 5HT on audio->V1 transmission axons
+    params["plasticityThresholdDeprived"] = 1.0  # lowered plasticity threshold (baseline 3.0)
+
     # --- ART secondary area (used when useART=True) ---
     params["useART"] = False                 # opt-in: Fuzzy ART classifier drives top-down
     params["artVigilance"] = 0.75            # ART vigilance rho (reject threshold)

@@ -85,6 +85,16 @@ class RetinotopicGrandPlanSimulation:
         self.deprivedColumns = self._deprivedColumns(self.silencedColumns)
         self.deprivedCells, self.intactCells = self._partitionV1Cells()
 
+        # Axons that undergo plasticity / cross-modal serotonin modulation. Under
+        # Realistic-5HT the manipulation is confined to the DEPRIVED region, so we
+        # use only the audio->V1 axons that target deprived cells (for full
+        # blindness that is all of them); the legacy path uses all remapping axons.
+        if params.get("realistic5HT", False):
+            deprivedSet = set(self.deprivedCells)
+            self.plasticAxons = [a for a in self.remapping if a.target in deprivedSet]
+        else:
+            self.plasticAxons = self.remapping
+
         # Retinotopic geometry for plotting.
         G = self.network.G
         self.inputGrid = np.asarray(stimulus.visualGrid, dtype=float)
@@ -174,7 +184,7 @@ class RetinotopicGrandPlanSimulation:
         self.audioCurrent.append(np.mean([c.lastSourceCurrent.get(self._audioPop, 0.0) for c in sc]) if sc else float("nan"))
         self.visualCurrent.append(np.mean([c.lastSourceCurrent.get(self._visualPop, 0.0) for c in sc]) if sc else float("nan"))
         self.topDownCurrent.append(np.mean([c.lastStreamCurrent[STREAM_TOPDOWN] for c in sc]) if sc else float("nan"))
-        self.remapWeight.append(float(np.mean([a.weight for a in self.remapping])) if self.remapping else float("nan"))
+        self.remapWeight.append(float(np.mean([a.weight for a in self.plasticAxons])) if self.plasticAxons else float("nan"))
         if self.network.useART:
             d = self.network.lastART
             self.artReject.append(bool(d["reject"]))
@@ -226,19 +236,40 @@ class RetinotopicGrandPlanSimulation:
         self._endEpoch(2)
 
     def epoch3_serotonin_plasticity(self):
-        self.network.setSerotonin(self.params["remapSerotoninLevel"])
+        p = self.params
+        if p.get("realistic5HT", False):
+            # Realistic (5HT2A/3A-consistent) deafferentation response, confined
+            # to the deprived region + its cross-modal input:
+            #  (i)  reduce somatic 5HT in deprived visual cortex,
+            #  (ii) raise V1 gain there (disinhibition),
+            #  (iii)raise 5HT on the cross-modal audio->V1 transmission,
+            #  (iv) lower the plasticity threshold.
+            self.network.setV1SomaticSerotonin(p["v1SerotoninDeprived"], self.deprivedCells)
+            self.network.setV1BottomUpGain(p["v1BottomUpGainDeprived"], self.deprivedCells)
+            self.network.setCrossModalAxonalSerotonin(p["crossModalSerotoninLevel"], self.plasticAxons)
+            plasticThreshold = p["plasticityThresholdDeprived"]
+        else:
+            self.network.setSerotonin(p["remapSerotoninLevel"])
+            plasticThreshold = p["plasticityThreshold"]
+
         if self.plasticityEnabled:
-            for axon in self.remapping:
-                axon.enablePlasticity(self.params["gamma_p"], self.params["gamma_d"],
-                                      self.params["plasticityThreshold"],
-                                      ceilingFactor=self.params["plasticityCeilingFactor"])
+            for axon in self.plasticAxons:
+                axon.enablePlasticity(p["gamma_p"], p["gamma_d"], plasticThreshold,
+                                      ceilingFactor=p["plasticityCeilingFactor"])
         self._stepFor(self.epochDurationMs)
-        for axon in self.remapping:
+        for axon in self.plasticAxons:
             axon.disablePlasticity()
         self._endEpoch(3)
 
     def epoch4_return(self):
-        self.network.setSerotonin(self.params["serotoninLevel"])
+        p = self.params
+        if p.get("realistic5HT", False):
+            # Restore the deprived region and its cross-modal input to baseline.
+            self.network.setV1SomaticSerotonin(p["serotoninLevel"], self.deprivedCells)
+            self.network.setV1BottomUpGain(1.0, self.deprivedCells)
+            self.network.setCrossModalAxonalSerotonin(p["serotoninLevel"], self.plasticAxons)
+        else:
+            self.network.setSerotonin(p["serotoninLevel"])
         self._stepFor(self.epochDurationMs)
         self._endEpoch(4)
 

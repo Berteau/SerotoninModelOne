@@ -313,11 +313,35 @@ class RetinotopicGrandPlanNetwork:
         gain = max(floor, min(1.0, gain))
         self.setV1BottomUpGain(gain)
 
-    def setV1BottomUpGain(self, gain):
-        # Scale the bottom-up stream weight on every V1 pyramidal. Called by the
-        # serotonin coupling above, and directly by analyses that sweep the gain.
-        for cell in self.populations["V1pyr"].cells:
+    def setV1BottomUpGain(self, gain, cells=None):
+        # Scale the bottom-up stream weight on V1 pyramidals (all, or a subset --
+        # e.g. the deprived region). Called by the serotonin coupling, by analyses
+        # that sweep the gain, and by the Realistic-5HT manipulation.
+        cells = self.populations["V1pyr"].cells if cells is None else cells
+        for cell in cells:
             cell.bottomUpGain = float(gain)
+
+    def setV1SomaticSerotonin(self, level, cells=None):
+        # Set the somatic 5HT receptor level (both 5HT2A and 5HT1A) on V1
+        # pyramidals (all, or a subset -- e.g. the deprived region), directly on
+        # the receptors. Used by Realistic-5HT to REDUCE serotonin in deprived
+        # visual cortex. Bypasses the population transmitter dict (which the
+        # Realistic path does not read), so somatic V1 serotonin can move
+        # independently of the cross-modal axonal serotonin.
+        cells = self.populations["V1pyr"].cells if cells is None else cells
+        for cell in cells:
+            for receptor in cell.diffuseReceptors:
+                receptor.setLevel(float(level))
+
+    def setCrossModalAxonalSerotonin(self, level, axons=None):
+        # Set the axonal 5HT receptor level on the cross-modal AudioInput -> V1
+        # remapping axons (all, or a subset), raising transmission (lowering
+        # failure). Used by Realistic-5HT to INCREASE serotonin on the auditory
+        # cross-modal input, independently of somatic V1 serotonin.
+        axons = self.audioRemappingAxons() if axons is None else axons
+        for axon in axons:
+            for receptor in axon.axonalReceptors:
+                receptor.setLevel(float(level))
 
     def audioRemappingAxons(self):
         # The cross-modal AudioInput -> V1pyr synapses (analogue of S_B -> P_A).

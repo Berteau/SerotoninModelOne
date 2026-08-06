@@ -98,12 +98,17 @@ def main():
                     help="ART training exemplars per class (only used with --art/--images)")
     ap.add_argument("--pretrain-settle", type=float, default=None,
                     help="ART pre-training settle per image (ms); default from params")
+    ap.add_argument("--realistic-5ht", action="store_true",
+                    help="phase 3 uses the literature-grounded Realistic-5HT mechanism "
+                         "(reduce 5HT in deprived V1 -> higher gain; raise 5HT on cross-modal "
+                         "audio input; lower plasticity threshold) instead of a uniform 5HT step")
     args = ap.parse_args()
 
     params = buildGrandPlanParams(gridSize=args.grid, cellsPerColumn=args.cpc, categoryCount=2)
     params["epochDurationMs"] = args.epoch
     params["warmupMs"] = args.warmup
     params["useART"] = args.art
+    params["realistic5HT"] = args.realistic_5ht
     if args.pretrain_settle is not None:
         params["artPretrainSettleMs"] = args.pretrain_settle
 
