@@ -94,18 +94,24 @@ def main():
     ap.add_argument("--stamp", default=None, help="output subdir name (default: UTC timestamp)")
     ap.add_argument("--art", action="store_true",
                     help="use the Fuzzy ART secondary area (classify/reject + content-specific top-down)")
+    ap.add_argument("--images-per-class", type=int, default=5,
+                    help="ART training exemplars per class (only used with --art/--images)")
+    ap.add_argument("--pretrain-settle", type=float, default=None,
+                    help="ART pre-training settle per image (ms); default from params")
     args = ap.parse_args()
 
     params = buildGrandPlanParams(gridSize=args.grid, cellsPerColumn=args.cpc, categoryCount=2)
     params["epochDurationMs"] = args.epoch
     params["warmupMs"] = args.warmup
     params["useART"] = args.art
+    if args.pretrain_settle is not None:
+        params["artPretrainSettleMs"] = args.pretrain_settle
 
     if args.images:
         # Load several exemplars per class so the ART classifier has something to
         # learn; the experiment itself uses stimuli[0] as the held stimulus.
         data = ImageFolderInputSet(args.images, gridSize=args.grid, audioBins=params["audioBins"],
-                                   imagesPerClass=5, seed=0,
+                                   imagesPerClass=args.images_per_class, seed=0,
                                    minRateHz=params["minRateHz"], maxRateHz=params["maxRateHz"])
         print("Using real images from %s: classes %s (%d exemplars)"
               % (args.images, data.classNames, len(data.stimuli)))
