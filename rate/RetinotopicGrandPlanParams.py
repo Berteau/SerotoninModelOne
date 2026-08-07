@@ -73,10 +73,20 @@ def buildGrandPlanParams(gridSize=10, cellsPerColumn=8, categoryCount=2):
     # cross-modal audio->V1 transmission axons, and (iv) lowers the plasticity
     # threshold. All four are consistent with 5HT2A/3A modulation.
     params["realistic5HT"] = False
-    params["v1SerotoninDeprived"] = 2.0          # reduced somatic 5HT in deprived V1 (baseline 10)
-    params["v1BottomUpGainDeprived"] = 1.5       # raised gain (disinhibition) in deprived region
+    params["v1SerotoninDeprived"] = 8.0          # mildly reduced somatic 5HT in deprived V1 (baseline 10)
+    params["v1BottomUpGainDeprived"] = 1.5       # raised bottom-up gain in deprived region (5HT2A)
     params["crossModalSerotoninLevel"] = 40.0    # raised 5HT on audio->V1 transmission axons
     params["plasticityThresholdDeprived"] = 1.0  # lowered plasticity threshold (baseline 3.0)
+    # Deprivation-induced INTRINSIC EXCITABILITY homeostasis (Desai, Rutherford &
+    # Turrigiano 1999; the firing-rate-homeostasis literature). This is the
+    # NON-serotonergic driver of the transient hyperactivity: an input-INDEPENDENT
+    # tonic depolarization of the deprived region during the reorganization phase.
+    # It is required because neither bottom-up gain (amplifies absent input) nor
+    # disinhibition (removes absent activity-driven inhibition) can raise firing in
+    # a cortex that has lost its feedforward drive; the hyperactivity in turn
+    # provides the postsynaptic activity the Hebbian cross-modal remapping needs to
+    # bootstrap. Relaxes at return as remapping restores drive (set to 0 in phase 4).
+    params["intrinsicExcitabilityDrive"] = 60.0  # tonic depolarizing offset (deprived region, phase 3)
 
     # --- ART secondary area (used when useART=True) ---
     params["useART"] = False                 # opt-in: Fuzzy ART classifier drives top-down

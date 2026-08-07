@@ -247,6 +247,11 @@ class RetinotopicGrandPlanSimulation:
             self.network.setV1SomaticSerotonin(p["v1SerotoninDeprived"], self.deprivedCells)
             self.network.setV1BottomUpGain(p["v1BottomUpGainDeprived"], self.deprivedCells)
             self.network.setCrossModalAxonalSerotonin(p["crossModalSerotoninLevel"], self.plasticAxons)
+            # Non-serotonergic driver of the transient hyperactivity (intrinsic
+            # excitability homeostasis); required for the cortex to fire enough
+            # for the Hebbian remapping to bootstrap. Removed at return.
+            self.network.setDeprivedIntrinsicDrive(p.get("intrinsicExcitabilityDrive", 0.0),
+                                                   self.deprivedCells)
             plasticThreshold = p["plasticityThresholdDeprived"]
         else:
             self.network.setSerotonin(p["remapSerotoninLevel"])
@@ -264,10 +269,12 @@ class RetinotopicGrandPlanSimulation:
     def epoch4_return(self):
         p = self.params
         if p.get("realistic5HT", False):
-            # Restore the deprived region and its cross-modal input to baseline.
+            # Restore the deprived region and its cross-modal input to baseline;
+            # the intrinsic-excitability drive relaxes as remapping restores input.
             self.network.setV1SomaticSerotonin(p["serotoninLevel"], self.deprivedCells)
             self.network.setV1BottomUpGain(1.0, self.deprivedCells)
             self.network.setCrossModalAxonalSerotonin(p["serotoninLevel"], self.plasticAxons)
+            self.network.setDeprivedIntrinsicDrive(0.0, self.deprivedCells)
         else:
             self.network.setSerotonin(p["serotoninLevel"])
         self._stepFor(self.epochDurationMs)

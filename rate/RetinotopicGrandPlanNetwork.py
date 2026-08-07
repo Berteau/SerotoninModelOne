@@ -333,6 +333,20 @@ class RetinotopicGrandPlanNetwork:
             for receptor in cell.diffuseReceptors:
                 receptor.setLevel(float(level))
 
+    def setDeprivedIntrinsicDrive(self, offset, cells=None):
+        # Deprivation-induced intrinsic-excitability homeostasis (Desai, Rutherford
+        # & Turrigiano 1999): an input-INDEPENDENT tonic depolarization of the
+        # deprived region. Unlike bottom-up gain (which amplifies an absent input)
+        # or disinhibition (which removes an absent, activity-driven inhibition),
+        # this can raise firing in a cortex that has lost its feedforward drive --
+        # the source of the transient hyperactivity that provides the postsynaptic
+        # activity Hebbian cross-modal remapping needs to bootstrap. Applied via
+        # the neuron's external (injected) current, which is additive outside the
+        # normalized mixture.
+        cells = self.populations["V1pyr"].cells if cells is None else cells
+        for cell in cells:
+            cell.setInjectedCurrent(float(offset))
+
     def setCrossModalAxonalSerotonin(self, level, axons=None):
         # Set the axonal 5HT receptor level on the cross-modal AudioInput -> V1
         # remapping axons (all, or a subset), raising transmission (lowering
