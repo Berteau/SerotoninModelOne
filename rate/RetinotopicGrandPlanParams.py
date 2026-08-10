@@ -107,7 +107,9 @@ def buildGrandPlanParams(gridSize=10, cellsPerColumn=8, categoryCount=2):
                                                # recovers (intrinsic/scaling changes reverse
                                                # slowly) -> underdamped -> transient overshoot
     params["homeostaticUpdateEvery"] = 50      # steps between controller updates
-    params["homeostaticGain"] = 1.4            # deficit->h loop gain (>1 allows overshoot)
+    params["homeostaticGain"] = 2.5            # deficit->h loop gain; with the slow relax
+                                               # above this gives a clear (~+8%) transient
+                                               # hyperactivity overshoot that then settles
 
     # --- ART secondary area (used when useART=True) ---
     params["useART"] = False                 # opt-in: Fuzzy ART classifier drives top-down
