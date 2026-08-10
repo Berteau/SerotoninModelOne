@@ -89,11 +89,19 @@ class RetinotopicGrandPlanSimulation:
         # Realistic-5HT the manipulation is confined to the DEPRIVED region, so we
         # use only the audio->V1 axons that target deprived cells (for full
         # blindness that is all of them); the legacy path uses all remapping axons.
-        if params.get("realistic5HT", False):
+        self.emergent = params.get("emergent5HT", False)
+        if params.get("realistic5HT", False) or self.emergent:
             deprivedSet = set(self.deprivedCells)
             self.plasticAxons = [a for a in self.remapping if a.target in deprivedSet]
         else:
             self.plasticAxons = self.remapping
+
+        # Emergent (closed-loop) controller state.
+        self.homeostaticH = 0.0        # latent deprivation drive h in [0,1]
+        self.A_set = None              # baseline activity set-point (deprived region)
+        self._controllerActive = False
+        self._ctrlEvery = int(params.get("homeostaticUpdateEvery", 50))
+        self._ctrlCount = 0
 
         # Retinotopic geometry for plotting.
         G = self.network.G
@@ -109,6 +117,7 @@ class RetinotopicGrandPlanSimulation:
         self.visualCurrent = []
         self.topDownCurrent = []
         self.remapWeight = []
+        self.homeostaticDrive = []   # controller h over time (emergent mode)
         self.v1MapsByEpoch = {}   # epoch index -> G x G V1 column-rate snapshot
         # ART decision time series (only populated when useART). artClass encodes
         # the decision numerically: the class label, or REJECT (-1) on reject.
@@ -185,6 +194,7 @@ class RetinotopicGrandPlanSimulation:
         self.visualCurrent.append(np.mean([c.lastSourceCurrent.get(self._visualPop, 0.0) for c in sc]) if sc else float("nan"))
         self.topDownCurrent.append(np.mean([c.lastStreamCurrent[STREAM_TOPDOWN] for c in sc]) if sc else float("nan"))
         self.remapWeight.append(float(np.mean([a.weight for a in self.plasticAxons])) if self.plasticAxons else float("nan"))
+        self.homeostaticDrive.append(self.homeostaticH)
         if self.network.useART:
             d = self.network.lastART
             self.artReject.append(bool(d["reject"]))
@@ -196,14 +206,51 @@ class RetinotopicGrandPlanSimulation:
 
     def _stepFor(self, durationMs, record=True):
         for _ in np.arange(0.0, durationMs, self.tau):
+            if self._controllerActive:
+                self._ctrlCount += 1
+                if self._ctrlCount % self._ctrlEvery == 0:
+                    self._controllerStep()
             self.network.step()
             if record:
                 self._record()
 
+    # ---- emergent (closed-loop) homeostatic controller ----
+
+    def _deprivedActivity(self):
+        sc = self.deprivedCells
+        return float(np.mean([c.rate for c in sc])) if sc else 0.0
+
+    def _controllerStep(self):
+        # Read the deprived region's activity deficit and low-pass it into the
+        # latent drive h, then scale every deprivation response by h. h relaxes
+        # as remapping restores activity, so the whole trajectory self-limits.
+        p = self.params
+        A = self._deprivedActivity()
+        deficit = 0.0 if not self.A_set else max(0.0, (self.A_set - A) / self.A_set)
+        target = min(1.0, p.get("homeostaticGain", 1.4) * deficit)
+        dt = self._ctrlEvery * self.tau
+        self.homeostaticH += (dt / p["homeostaticTau"]) * (target - self.homeostaticH)
+        self.homeostaticH = min(1.0, max(0.0, self.homeostaticH))
+        self._applyEmergentResponses(self.homeostaticH)
+
+    def _applyEmergentResponses(self, h):
+        # Interpolate every response from baseline (h=0) to its realistic5HT
+        # "full deprivation" value (h=1); tie the cross-modal serotonin and the
+        # plasticity threshold to the same drive.
+        p = self.params
+        base5ht = p["serotoninLevel"]
+        self.network.setDeprivedIntrinsicDrive(h * p["intrinsicExcitabilityDrive"], self.deprivedCells)
+        self.network.setV1BottomUpGain(1.0 + h * (p["v1BottomUpGainDeprived"] - 1.0), self.deprivedCells)
+        self.network.setV1SomaticSerotonin(base5ht - h * (base5ht - p["v1SerotoninDeprived"]), self.deprivedCells)
+        self.network.setCrossModalAxonalSerotonin(base5ht + h * (p["crossModalSerotoninLevel"] - base5ht), self.plasticAxons)
+        thr = p["plasticityThreshold"] - h * (p["plasticityThreshold"] - p["plasticityThresholdDeprived"])
+        for a in self.plasticAxons:
+            a.plasticityThreshold = thr
+
     def _resetRecords(self):
         self.epochBoundaries = []
         for key in ("rateDeprived", "rateIntact", "audioCurrent",
-                    "visualCurrent", "topDownCurrent", "remapWeight",
+                    "visualCurrent", "topDownCurrent", "remapWeight", "homeostaticDrive",
                     "artClass", "artReject", "artMatch", "artCategory"):
             setattr(self, key, [])
 
@@ -281,9 +328,39 @@ class RetinotopicGrandPlanSimulation:
         self._endEpoch(4)
 
     def run(self):
+        if self.emergent:
+            return self._run_emergent()
         self.warmup()
         self.epoch1_baseline()
         self.epoch2_loss()
         self.epoch3_serotonin_plasticity()
         self.epoch4_return()
+        return self
+
+    def _run_emergent(self):
+        # Closed loop: the ONLY imposed event is the sensory loss at the start of
+        # epoch 2. Everything else -- the drop, the hyperactivity overshoot, the
+        # remapping, the settle -- emerges from the homeostatic controller reading
+        # the activity deficit. Epochs 2-4 are just equal-length observation
+        # windows (time markers), not imposed transitions.
+        p = self.params
+        self.warmup()
+        self.epoch1_baseline()
+        # Set-point = the deprived region's own baseline activity (second half of epoch 1).
+        half = len(self.rateDeprived) // 2
+        self.A_set = float(np.nanmean(self.rateDeprived[half:])) if self.rateDeprived else None
+
+        # Impose loss; enable plasticity (reduced rate, dynamic threshold set by
+        # the controller); activate the controller. Nothing else is scheduled.
+        self.network.setVisualScotoma(self.silencedColumns)
+        if self.plasticityEnabled:
+            for axon in self.plasticAxons:
+                axon.enablePlasticity(p["gamma_p"], p["gamma_d"], p["plasticityThreshold"],
+                                      ceilingFactor=p["plasticityCeilingFactor"])
+        self._controllerActive = True
+        for epoch in (2, 3, 4):
+            self._stepFor(self.epochDurationMs)
+            self._endEpoch(epoch)
+        for axon in self.plasticAxons:
+            axon.disablePlasticity()
         return self

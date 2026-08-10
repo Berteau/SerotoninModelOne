@@ -98,7 +98,43 @@ def plot_experiment(sim, control, outdir, title_prefix):
         if p is not None:
             paths.append(p)
 
+    # --- Panel 6: emergent homeostatic controller (only when it ran) ---
+    hd = getattr(sim, "homeostaticDrive", None)
+    if hd and np.any(np.asarray(hd, dtype=float) > 1e-6):
+        p = plot_homeostatic(sim, outdir, title_prefix)
+        if p is not None:
+            paths.append(p)
+
     return paths
+
+
+def plot_homeostatic(sim, outdir, title_prefix):
+    # Emergent controller: deprived firing (left axis) and the latent drive h
+    # (right axis) over time, showing that the drop -> hyperactivity -> settle
+    # trajectory and the response ramp/relaxation emerge from the activity deficit
+    # -- the only imposed event is the loss.
+    tau = sim.tau
+    rate = np.asarray(sim.rateDeprived, dtype=float)
+    h = np.asarray(sim.homeostaticDrive, dtype=float)
+    t = np.arange(len(rate)) * tau
+    fig, axL = plt.subplots(figsize=(9, 4))
+    axL.plot(t, smooth(rate, 40.0, tau), color="C3", label="deprived V1 rate")
+    if sim.A_set is not None:
+        axL.axhline(sim.A_set, color="C3", ls=":", lw=1, label="baseline set-point")
+    axL.set_xlabel("Time (ms)"); axL.set_ylabel("V1 firing rate (Hz)", color="C3")
+    axL.tick_params(axis="y", labelcolor="C3")
+    axR = axL.twinx()
+    axR.plot(t, h, color="C0", label="homeostatic drive h")
+    axR.set_ylabel("controller drive h", color="C0"); axR.set_ylim(0, 1.05)
+    axR.tick_params(axis="y", labelcolor="C0")
+    epoch_lines(axL, sim.epochBoundaries)
+    axL.set_title("%s: emergent homeostatic response (only the loss is imposed)" % title_prefix)
+    l1, la = axL.get_legend_handles_labels(); l2, lb = axR.get_legend_handles_labels()
+    axL.legend(l1 + l2, la + lb, fontsize="small", loc="upper right")
+    fig.tight_layout()
+    path = os.path.join(outdir, "homeostatic.png")
+    fig.savefig(path, dpi=110); plt.close(fig)
+    return path
 
 
 def plot_art(sim, outdir, title_prefix):

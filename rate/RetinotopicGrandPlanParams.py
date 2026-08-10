@@ -88,6 +88,23 @@ def buildGrandPlanParams(gridSize=10, cellsPerColumn=8, categoryCount=2):
     # bootstrap. Relaxes at return as remapping restores drive (set to 0 in phase 4).
     params["intrinsicExcitabilityDrive"] = 60.0  # tonic depolarizing offset (deprived region, phase 3)
 
+    # --- "Emergent Realistic 5HT" (opt-in): closed-loop, activity-driven ---
+    # Instead of imposing the phase-3 responses on a schedule, a homeostatic
+    # controller reads the deprived region's activity deficit each update and
+    # ramps ALL responses (intrinsic excitability, bottom-up gain, reduced V1
+    # 5HT, raised cross-modal 5HT, lowered plasticity threshold) in proportion to
+    # a single latent drive h in [0,1]; h relaxes as remapping restores activity.
+    # The only imposed event is the sensory loss; the drop -> hyperactivity ->
+    # settle trajectory then emerges (and self-limits) from the loop. The
+    # response VALUES at h=1 are the realistic5HT constants above; at h=0 they
+    # equal baseline. Grounded in firing-rate / intrinsic-excitability homeostasis
+    # (Turrigiano; Desai 1999) with the raphe/5HT2A-3A responses tied to the same
+    # activity signal (cortico-raphe feedback substrate; Celada 2001).
+    params["emergent5HT"] = False
+    params["homeostaticTau"] = 800.0          # controller time constant (ms)
+    params["homeostaticUpdateEvery"] = 50      # steps between controller updates
+    params["homeostaticGain"] = 1.4            # deficit->h loop gain (>1 allows overshoot)
+
     # --- ART secondary area (used when useART=True) ---
     params["useART"] = False                 # opt-in: Fuzzy ART classifier drives top-down
     params["artVigilance"] = 0.75            # ART vigilance rho (reject threshold)

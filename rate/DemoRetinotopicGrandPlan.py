@@ -102,6 +102,10 @@ def main():
                     help="phase 3 uses the literature-grounded Realistic-5HT mechanism "
                          "(reduce 5HT in deprived V1 -> higher gain; raise 5HT on cross-modal "
                          "audio input; lower plasticity threshold) instead of a uniform 5HT step")
+    ap.add_argument("--emergent-5ht", action="store_true",
+                    help="closed-loop version: the only imposed event is the sensory loss; a "
+                         "homeostatic controller drives all responses from the activity deficit. "
+                         "Reduces the plasticity rate 10x (pair with longer --epoch).")
     args = ap.parse_args()
 
     params = buildGrandPlanParams(gridSize=args.grid, cellsPerColumn=args.cpc, categoryCount=2)
@@ -109,6 +113,9 @@ def main():
     params["warmupMs"] = args.warmup
     params["useART"] = args.art
     params["realistic5HT"] = args.realistic_5ht
+    params["emergent5HT"] = args.emergent_5ht
+    if args.emergent_5ht:
+        params["gamma_p"] = params["gamma_p"] / 10.0   # >=10x lower plasticity rate
     if args.pretrain_settle is not None:
         params["artPretrainSettleMs"] = args.pretrain_settle
 
