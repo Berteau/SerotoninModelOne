@@ -229,7 +229,13 @@ class RetinotopicGrandPlanSimulation:
         deficit = 0.0 if not self.A_set else max(0.0, (self.A_set - A) / self.A_set)
         target = min(1.0, p.get("homeostaticGain", 1.4) * deficit)
         dt = self._ctrlEvery * self.tau
-        self.homeostaticH += (dt / p["homeostaticTau"]) * (target - self.homeostaticH)
+        # Asymmetric time constant: ramp fast (tau), relax slow (tauRelax). The
+        # slow relaxation makes intrinsic/scaling changes persist after activity
+        # recovers, so the loop is underdamped and produces the transient
+        # hyperactivity overshoot rather than a critically-damped monotonic return.
+        tau_ctrl = p["homeostaticTau"] if target >= self.homeostaticH \
+            else p.get("homeostaticTauRelax", p["homeostaticTau"])
+        self.homeostaticH += (dt / tau_ctrl) * (target - self.homeostaticH)
         self.homeostaticH = min(1.0, max(0.0, self.homeostaticH))
         self._applyEmergentResponses(self.homeostaticH)
 
