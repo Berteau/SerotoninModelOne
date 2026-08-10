@@ -102,7 +102,7 @@ def buildGrandPlanParams(gridSize=10, cellsPerColumn=8, categoryCount=2):
     # activity signal (cortico-raphe feedback substrate; Celada 2001).
     params["emergent5HT"] = False
     params["homeostaticTau"] = 800.0          # controller ramp time constant (ms)
-    params["homeostaticTauRelax"] = 3000.0     # RELAX time constant (ms); > tau makes the
+    params["homeostaticTauRelax"] = 6000.0     # RELAX time constant (ms); > tau makes the
                                                # homeostatic changes persist after activity
                                                # recovers (intrinsic/scaling changes reverse
                                                # slowly) -> underdamped -> transient overshoot
