@@ -47,16 +47,30 @@ def main():
                                minRateHz=p["minRateHz"], maxRateHz=p["maxRateHz"])
     sim = RetinotopicGrandPlanSimulation(p, data.stimuli[0], data, mode=mode,
                                          plasticityEnabled=plast)
-    sim.run()
 
-    blob = {f: getattr(sim, f) for f in FIELDS}
-    blob["params"] = p
-    blob["classNames"] = data.classNames
-    blob["trueLabel"] = data.stimuli[0].label
-    blob["mode"] = mode
-    blob["plasticity"] = plast
-    with open(out, "wb") as fh:
-        pickle.dump(blob, fh)
+    def _blob(completedEpoch):
+        b = {f: getattr(sim, f) for f in FIELDS}
+        b["params"] = p
+        b["classNames"] = data.classNames
+        b["trueLabel"] = data.stimuli[0].label
+        b["mode"] = mode
+        b["plasticity"] = plast
+        b["completedEpoch"] = completedEpoch      # 4 == full run
+        return b
+
+    def _dump(b, path):
+        tmp = path + ".tmp"
+        with open(tmp, "wb") as fh:
+            pickle.dump(b, fh)
+        os.replace(tmp, path)                      # atomic: a restart can't leave a half-file
+
+    # Resilience: after each epoch, atomically overwrite <out> with the partial
+    # state so a worker restart mid-run loses at most one epoch. The final write
+    # (completedEpoch=4) is identical in shape, so the plotter needs no changes.
+    sim.checkpointFn = lambda s, ep: _dump(_blob(ep), out)
+
+    sim.run()
+    _dump(_blob(4), out)
     print("wrote %s  (mode=%s plast=%s, deprived final rate=%.2f)"
           % (out, mode, plast, sim.rateDeprived[-1] if sim.rateDeprived else float("nan")))
 

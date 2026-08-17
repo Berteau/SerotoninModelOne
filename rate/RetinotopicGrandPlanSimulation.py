@@ -355,6 +355,12 @@ class RetinotopicGrandPlanSimulation:
         # Set-point = the deprived region's own baseline activity (second half of epoch 1).
         half = len(self.rateDeprived) // 2
         self.A_set = float(np.nanmean(self.rateDeprived[half:])) if self.rateDeprived else None
+        # Optional resilience hook: a caller may set self.checkpointFn to dump the
+        # partial recorded state after each epoch, so a container/worker restart
+        # mid-run loses at most one epoch instead of the whole (multi-hour) job.
+        ckpt = getattr(self, "checkpointFn", None)
+        if ckpt is not None:
+            ckpt(self, 1)
 
         # Impose loss; enable plasticity (reduced rate, dynamic threshold set by
         # the controller); activate the controller. Nothing else is scheduled.
@@ -367,6 +373,8 @@ class RetinotopicGrandPlanSimulation:
         for epoch in (2, 3, 4):
             self._stepFor(self.epochDurationMs)
             self._endEpoch(epoch)
+            if ckpt is not None:
+                ckpt(self, epoch)
         for axon in self.plasticAxons:
             axon.disablePlasticity()
         return self
