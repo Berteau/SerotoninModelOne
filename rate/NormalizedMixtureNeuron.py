@@ -168,6 +168,7 @@ class NormalizedMixtureNeuron(RateNeuron):
         self.rate += self.tau * (target - self.rate) / self.tau_m
         if self.rate < 0.0:
             self.rate = 0.0
-        self.rateRecord.append(self.rate)
+        if self.recordCellHistory:
+            self.rateRecord.append(self.rate)
         # synapticInput / synapticInputBySource are cleared by the population
         # after this step (clearSynapticAccumulators), same contract as RateNeuron.

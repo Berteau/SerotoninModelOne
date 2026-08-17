@@ -463,6 +463,16 @@ class RetinotopicGrandPlanNetwork:
         self.artActive = wasActive
         return percept
 
+    def setCellHistoryRecording(self, enabled):
+        # Turn per-cell rateRecord accumulation on/off across every population.
+        # Off keeps long (10x10, hundreds of thousands of steps) runs within the
+        # memory budget: the per-cell history is the dominant cost (~7 GB) and is
+        # unused by the grand-plan metrics/plots (population-level rateRecord and
+        # the recorded scalar series are untouched).
+        for pop in self.populations.values():
+            for cell in pop.cells:
+                cell.recordCellHistory = bool(enabled)
+
     def resetActivity(self):
         # Zero all firing rates, conductances, and synaptic accumulators, for a
         # clean presentation (used between ART training images).

@@ -47,6 +47,9 @@ def main():
                                minRateHz=p["minRateHz"], maxRateHz=p["maxRateHz"])
     sim = RetinotopicGrandPlanSimulation(p, data.stimuli[0], data, mode=mode,
                                          plasticityEnabled=plast)
+    # Per-cell rate history is unused here and dominates memory (~7 GB at 10x10);
+    # switch it off so the four sims fit and can run in parallel.
+    sim.network.setCellHistoryRecording(False)
 
     def _blob(completedEpoch):
         b = {f: getattr(sim, f) for f in FIELDS}

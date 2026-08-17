@@ -55,6 +55,12 @@ class RateNeuron:
         self.outputs = []
         self.diffuseReceptors = []
 
+        # Per-cell firing-rate history. Nothing in the grand-plan experiment reads
+        # it (metrics use cell.rate live and record their own scalar series), and
+        # at 10x10 x hundreds of thousands of steps it is the dominant memory cost
+        # (~7 GB), so it can be turned off for long runs. Default True preserves
+        # every existing caller / self-check.
+        self.recordCellHistory = True
         self.rateRecord = []
 
     def transfer(self, I):
@@ -94,7 +100,8 @@ class RateNeuron:
         self.rate += self.tau * (target - self.rate) / self.tau_m
         if self.rate < 0.0:
             self.rate = 0.0
-        self.rateRecord.append(self.rate)
+        if self.recordCellHistory:
+            self.rateRecord.append(self.rate)
         # NOTE: synapticInput / synapticInputBySource are NOT cleared here.
         # The population clears them (clearSynapticAccumulators) after computing
         # the ablation influence metric, which needs the per-source breakdown
@@ -115,6 +122,7 @@ class RateInputNeuron:
         self.time = 0.0
         self.inputs = []
         self.outputs = []
+        self.recordCellHistory = True
         self.rateRecord = []
 
     def setRate(self, rate):
@@ -128,4 +136,5 @@ class RateInputNeuron:
 
     def step(self):
         self.time += self.tau
-        self.rateRecord.append(self.rate)
+        if self.recordCellHistory:
+            self.rateRecord.append(self.rate)
