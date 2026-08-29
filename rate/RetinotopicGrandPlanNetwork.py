@@ -472,6 +472,10 @@ class RetinotopicGrandPlanNetwork:
         for pop in self.populations.values():
             for cell in pop.cells:
                 cell.recordCellHistory = bool(enabled)
+                if not enabled:
+                    # Free anything already accumulated (e.g. during ART
+                    # pretraining) so it does not linger for the whole run.
+                    cell.rateRecord = []
 
     def resetActivity(self):
         # Zero all firing rates, conductances, and synaptic accumulators, for a

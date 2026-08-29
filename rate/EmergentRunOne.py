@@ -15,17 +15,21 @@ from rate.StructuredInput import ImageFolderInputSet
 Run ONE emergent (option-B) sensory-loss simulation (one mode x one plasticity
 condition) and pickle its recorded data, so the four sims of the experiment can
 run as independent parallel processes (each ~90 min at 5000 ms epochs) rather
-than sequentially. ART is OFF here (classifier kept separate per the current
-plan); the emergent RATE trajectory is ART-independent.
+than sequentially. ART (the secondary-area classifier + top-down feedback) is
+OFF by default and enabled with the optional [art] flag; when on, the ART
+decision/match series are recorded too, so the hallucination + resolution
+readout can be plotted over the emergent trajectory.
 
-Usage: python3 rate/EmergentRunOne.py <mode> <plast 0|1> <out.pkl> <images> [grid] [epoch]
+Usage: python3 rate/EmergentRunOne.py <mode> <plast 0|1> <out.pkl> <images> [grid] [epoch] [art 0|1]
 '''
 
 FIELDS = ["tau", "epochDurationMs", "epochBoundaries", "A_set",
           "rateDeprived", "rateIntact", "audioCurrent", "visualCurrent",
           "topDownCurrent", "remapWeight", "homeostaticDrive",
           "v1MapsByEpoch", "inputGrid", "silencedMap", "deprivedMap",
-          "silencedColumns", "deprivedColumns"]
+          "silencedColumns", "deprivedColumns",
+          # ART secondary-area readout (empty lists when ART is off).
+          "artClass", "artReject", "artMatch", "artCategory"]
 
 
 def main():
@@ -35,12 +39,14 @@ def main():
     images = sys.argv[4]
     grid = int(sys.argv[5]) if len(sys.argv) > 5 else 10
     epoch = int(sys.argv[6]) if len(sys.argv) > 6 else 5000
+    art = bool(int(sys.argv[7])) if len(sys.argv) > 7 else False
 
     random.seed(0); np.random.seed(0)
     p = buildGrandPlanParams(gridSize=grid, cellsPerColumn=8, categoryCount=2)
     p["epochDurationMs"] = epoch
     p["warmupMs"] = 300
     p["emergent5HT"] = True
+    p["useART"] = art                           # secondary-area classifier + top-down
     p["gamma_p"] = p["gamma_p"] / 10.0          # >=10x lower plasticity rate
     data = ImageFolderInputSet(images, gridSize=grid, audioBins=p["audioBins"],
                                imagesPerClass=3, seed=0,

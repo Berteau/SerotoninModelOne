@@ -26,6 +26,8 @@ def load(path):
     with open(path, "rb") as fh:
         blob = pickle.load(fh)
     sim = types.SimpleNamespace(**blob)
+    # plot_art reads sim.inputSet.classNames; give it a light shim.
+    sim.inputSet = types.SimpleNamespace(classNames=blob.get("classNames"))
     return sim
 
 
