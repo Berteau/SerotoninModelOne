@@ -182,6 +182,110 @@ def load_image_grid(path, gridSize):
     return np.asarray(img, dtype=float) / 255.0
 
 
+class SoundBank:
+    """A fixed bank of `size` distinct sound clips (tonotopic vectors in [0,1]).
+
+    Each clip is a fixed random pattern (seeded). Class c has a canonical clip
+    (index c mod size); the presenter plays it with probability matchProb, else a
+    uniformly random clip, so clip-ID is loosely correlated with class-ID. The
+    bank may be larger than the class count, so some clips carry structure not
+    tied to any visual class -- material for novel auditory categories.
+    """
+
+    def __init__(self, size, audioBins, seed=0):
+        self.size = int(size)
+        self.audioBins = int(audioBins)
+        rng = np.random.RandomState(seed)
+        self.clips = [_minmax01(rng.randn(audioBins)) for _ in range(self.size)]
+
+    def canonical_clip(self, classLabel):
+        return classLabel % self.size
+
+    def clip_vector(self, clipId):
+        return self.clips[clipId]
+
+
+class SequencePresenter:
+    """Wraps an InputSet (synthetic or ImageFolderInputSet) and adds (a) a fixed
+    sound bank whose clip-ID is loosely correlated with image class-ID, and (b) a
+    seeded, reproducible, randomly-shuffled presentation sequence.
+
+    A presentation is a (stimulusIndex, clipId) pair. Visual rates come from the
+    wrapped set; audio rates come from the chosen clip. Correlation strength is
+    set by matchProb (prob the canonical clip for the image's class is played).
+    """
+
+    def __init__(self, inputSet, soundBankSize=None, matchProb=0.25, seed=0):
+        self.inputSet = inputSet
+        self.audioBins = inputSet.audioBins
+        self.classNames = getattr(inputSet, "classNames", None)
+        self.classCount = inputSet.classCount
+        self.matchProb = float(matchProb)
+        if soundBankSize is None:
+            soundBankSize = self.classCount
+        self.bank = SoundBank(soundBankSize, self.audioBins, seed=seed + 101)
+
+    # ---- sequence ----
+
+    def generate_sequence(self, nPresentations, seed=0):
+        """List of (stimulusIndex, clipId), length nPresentations. Class exposure
+        is balanced (tiled permutations of the stimulus list); the clip for each
+        presentation is the canonical clip w.p. matchProb else a uniform-random
+        bank clip. Reproducible from seed."""
+        rng = np.random.RandomState(seed)
+        nStim = len(self.inputSet.stimuli)
+        order = []
+        while len(order) < nPresentations:
+            perm = list(rng.permutation(nStim))
+            order.extend(perm)
+        order = order[:nPresentations]
+        seq = []
+        for si in order:
+            label = self.inputSet.stimuli[si].label
+            if rng.rand() < self.matchProb:
+                clip = self.bank.canonical_clip(label)
+            else:
+                clip = int(rng.randint(self.bank.size))
+            seq.append((si, clip))
+        return seq
+
+    # ---- rate conversion ----
+
+    def visualRates(self, stimulusIndex):
+        st = self.inputSet.stimuli[stimulusIndex]
+        return self.inputSet.visualRates(st)
+
+    def audioRates(self, clipId):
+        return self.inputSet._to_rate(self.bank.clip_vector(clipId))
+
+    def true_label(self, stimulusIndex):
+        return self.inputSet.stimuli[stimulusIndex].label
+
+    # ---- verification ----
+
+    def measuredClipClassAssociation(self, sequence):
+        """Cramer's V between clip-ID and class-ID over a sequence, the categorical
+        analogue of the old r = 0.25 audio-visual correlation (0 = independent,
+        1 = deterministic). Use to calibrate matchProb."""
+        labels = [self.inputSet.stimuli[si].label for si, _ in sequence]
+        clips = [c for _, c in sequence]
+        K = self.classCount
+        M = self.bank.size
+        table = np.zeros((K, M))
+        for lab, cl in zip(labels, clips):
+            table[lab, cl] += 1
+        n = table.sum()
+        if n == 0:
+            return float("nan")
+        row = table.sum(1, keepdims=True)
+        col = table.sum(0, keepdims=True)
+        expected = row @ col / n
+        with np.errstate(divide="ignore", invalid="ignore"):
+            chi2 = np.nansum(np.where(expected > 0, (table - expected) ** 2 / expected, 0.0))
+        denom = n * (min(K, M) - 1)
+        return float(np.sqrt(chi2 / denom)) if denom > 0 else float("nan")
+
+
 class ImageFolderInputSet(StructuredInputSet):
     """StructuredInputSet sourced from a folder of labeled images.
 

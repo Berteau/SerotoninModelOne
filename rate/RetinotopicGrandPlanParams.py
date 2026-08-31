@@ -111,6 +111,24 @@ def buildGrandPlanParams(gridSize=10, cellsPerColumn=8, categoryCount=2):
                                                # above this gives a clear (~+8%) transient
                                                # hyperactivity overshoot that then settles
 
+    # --- v3.1: sequence input, sound bank, switchable slow classifier ---
+    # A shuffled image sequence + discrete sound clips loosely correlated to
+    # class, read out by a switchable unsupervised classifier that learns slowly
+    # at all points, so new audio-driven categories can emerge under blindness.
+    # remapLearningRate (= gamma_p) and classifierLearningRate are the two
+    # DECOUPLED, runtime-set rates: the first drives activity recovery, the
+    # second is the slow category learning. See V3.1_Plan.md.
+    params["classifierType"] = "FUZZY_ART"       # FUZZY_ART | FUZZY_ARTMAP | KNN
+    params["classifierLearningRate"] = 0.05      # ART beta / KNN centroid step (SLOW)
+    params["knnDistanceVigilance"] = 0.30        # KNN: spawn a new prototype beyond this dist
+    params["presentationMs"] = 100.0             # duration of each image presentation
+    params["baselineMs"] = 2000.0                # sighted baseline (plasticity ON)
+    params["postLossMs"] = 20000.0               # deprivation -> recovery -> long stable window
+    params["snapshotEvery"] = 20                 # presentations between classifier snapshots
+    params["soundBankSize"] = None               # None -> = class count; may exceed it
+    params["soundClassMatchProb"] = 0.25          # P(canonical clip) -> clip/class association
+    params["homeostaticActivityTau"] = 500.0     # EMA tau for controller's activity read (ms)
+
     # --- ART secondary area (used when useART=True) ---
     params["useART"] = False                 # opt-in: Fuzzy ART classifier drives top-down
     params["artVigilance"] = 0.75            # ART vigilance rho (reject threshold)
