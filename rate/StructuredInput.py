@@ -261,6 +261,20 @@ class SequencePresenter:
     def true_label(self, stimulusIndex):
         return self.inputSet.stimuli[stimulusIndex].label
 
+    # ---- uniform presenter interface (shared with PairedSequencePresenter) ----
+
+    def audioRatesForPresentation(self, clipRef):
+        return self.audioRates(clipRef)
+
+    def canonical_audio_rates(self, classLabel):
+        # Representative audio for clean-V1 pretraining: the class's canonical clip.
+        return self.inputSet._to_rate(self.bank.clip_vector(self.bank.canonical_clip(classLabel)))
+
+    def audio_class_of(self, clipRef):
+        # For the synthetic bank the canonical clip index == class, so the clip
+        # id is its own audio-class label.
+        return int(clipRef)
+
     # ---- verification ----
 
     def measuredClipClassAssociation(self, sequence):
@@ -268,7 +282,7 @@ class SequencePresenter:
         analogue of the old r = 0.25 audio-visual correlation (0 = independent,
         1 = deterministic). Use to calibrate matchProb."""
         labels = [self.inputSet.stimuli[si].label for si, _ in sequence]
-        clips = [c for _, c in sequence]
+        clips = [self.audio_class_of(c) for _, c in sequence]
         K = self.classCount
         M = self.bank.size
         table = np.zeros((K, M))
@@ -330,4 +344,162 @@ class ImageFolderInputSet(StructuredInputSet):
 
     def _prototype_grids(self):
         return self._loadedGrids
+
+
+def load_band_powers(path):
+    """Parse an audio-stimulus .txt file: a line like
+
+        Band Powers: [2.39e-04 4.80e-02 ... 3.99e-10]
+
+    into a 1-D float array of band powers (any bracketed, whitespace/comma
+    separated list of numbers is accepted, across newlines)."""
+    with open(path) as fh:
+        text = fh.read()
+    lo, hi = text.find("["), text.rfind("]")
+    body = text[lo + 1:hi] if (lo != -1 and hi != -1 and hi > lo) else text.split(":", 1)[-1]
+    toks = body.replace(",", " ").split()
+    return np.array([float(t) for t in toks], dtype=float)
+
+
+class AudioStimulusBank:
+    """Real audio stimuli loaded from `root`/<class>/*.txt, one subfolder per
+    class (the SAME class names as the visual set). Each .txt is a band-power
+    vector (e.g. 22 bands) parsed by load_band_powers and normalized to [0,1].
+
+    Provides a bank of clips grouped by class, so a presentation can pair a
+    visual image of class C with an audio clip of class C (canonical) or of a
+    random class (loose correlation). audioBins is inferred from the files and
+    must match the network's AudioInput size.
+    """
+
+    def __init__(self, root, normalize="minmax"):
+        self.root = root
+        self.normalize = normalize
+        classDirs = sorted(d for d in os.listdir(root)
+                           if os.path.isdir(os.path.join(root, d)))
+        if not classDirs:
+            raise ValueError("No class subfolders found under %r" % root)
+        self.classNames = []
+        self.byClass = {}          # class index -> list of clip vectors
+        self.flat = []             # list of (classIndex, withinIndex)
+        bins = None
+        for label, name in enumerate(classDirs):
+            self.classNames.append(name)
+            d = os.path.join(root, name)
+            files = sorted(f for f in os.listdir(d) if f.lower().endswith(".txt"))
+            if not files:
+                raise ValueError("No .txt audio clips in class folder %r" % d)
+            clips = []
+            for f in files:
+                v = load_band_powers(os.path.join(d, f))
+                if bins is None:
+                    bins = len(v)
+                elif len(v) != bins:
+                    raise ValueError("Inconsistent band count in %s: %d != %d"
+                                     % (f, len(v), bins))
+                clips.append(self._norm(v))
+            self.byClass[label] = clips
+            for wi in range(len(clips)):
+                self.flat.append((label, wi))
+        self.audioBins = int(bins)
+
+    def _norm(self, v):
+        if self.normalize == "none":
+            return np.clip(v, 0.0, 1.0)
+        if self.normalize == "peak":
+            m = v.max()
+            return v / m if m > 0 else v
+        return _minmax01(v)        # default: per-clip min-max
+
+    def clip_vector(self, ref):
+        c, wi = ref
+        return self.byClass[c][wi]
+
+    def canonical_vector(self, classIndex):
+        # Representative clip for pretraining: the class-mean spectrum (renorm).
+        return _minmax01(np.mean(self.byClass[classIndex], axis=0))
+
+    def random_ref(self, rng, classIndex=None):
+        if classIndex is None:
+            return self.flat[rng.randint(len(self.flat))]
+        return (classIndex, rng.randint(len(self.byClass[classIndex])))
+
+
+class PairedSequencePresenter:
+    """Pairs a real visual set (ImageFolderInputSet) with a real AudioStimulusBank,
+    both organized by the SAME class names, into a seeded shuffled presentation
+    sequence. Each presentation pairs a visual image of class C with an audio clip
+    of class C with probability matchProb, else a clip of a uniformly random class
+    -- so audio-class is loosely (Cramer's V ~= matchProb) correlated with visual
+    class, exactly as in the synthetic path but with real stimuli.
+    """
+
+    def __init__(self, visualSet, audioBank, matchProb=0.25, seed=0):
+        self.inputSet = visualSet
+        self.audioBank = audioBank
+        self.audioBins = audioBank.audioBins
+        self.matchProb = float(matchProb)
+        self.classNames = visualSet.classNames
+        self.classCount = visualSet.classCount
+        # Map visual class index -> audio class index by NAME (sets must match).
+        vnames, anames = list(visualSet.classNames), list(audioBank.classNames)
+        if set(vnames) != set(anames):
+            raise ValueError("Visual vs audio class names differ:\n  visual=%s\n  audio =%s"
+                             % (vnames, anames))
+        aindex = {name: i for i, name in enumerate(anames)}
+        self.v2a = {vi: aindex[name] for vi, name in enumerate(vnames)}
+
+    def generate_sequence(self, nPresentations, seed=0):
+        """List of (visualStimIndex, audioRef) where audioRef = (audioClass, within)."""
+        rng = np.random.RandomState(seed)
+        nStim = len(self.inputSet.stimuli)
+        order = []
+        while len(order) < nPresentations:
+            order.extend(list(rng.permutation(nStim)))
+        order = order[:nPresentations]
+        seq = []
+        for si in order:
+            vclass = self.inputSet.stimuli[si].label
+            if rng.rand() < self.matchProb:
+                aref = self.audioBank.random_ref(rng, classIndex=self.v2a[vclass])
+            else:
+                aref = self.audioBank.random_ref(rng, classIndex=None)
+            seq.append((si, aref))
+        return seq
+
+    # ---- uniform presenter interface ----
+
+    def visualRates(self, stimulusIndex):
+        st = self.inputSet.stimuli[stimulusIndex]
+        return self.inputSet.visualRates(st)
+
+    def true_label(self, stimulusIndex):
+        return self.inputSet.stimuli[stimulusIndex].label
+
+    def audioRatesForPresentation(self, audioRef):
+        return self.inputSet._to_rate(self.audioBank.clip_vector(audioRef))
+
+    def canonical_audio_rates(self, classLabel):
+        return self.inputSet._to_rate(self.audioBank.canonical_vector(self.v2a[classLabel]))
+
+    def audio_class_of(self, audioRef):
+        return int(audioRef[0])
+
+    def measuredClipClassAssociation(self, sequence):
+        labels = [self.inputSet.stimuli[si].label for si, _ in sequence]
+        aclass = [self.audio_class_of(ar) for _, ar in sequence]
+        K = self.classCount
+        M = len(self.audioBank.classNames)
+        table = np.zeros((K, M))
+        for lab, a in zip(labels, aclass):
+            table[lab, a] += 1
+        n = table.sum()
+        if n == 0:
+            return float("nan")
+        row = table.sum(1, keepdims=True); col = table.sum(0, keepdims=True)
+        expected = row @ col / n
+        with np.errstate(divide="ignore", invalid="ignore"):
+            chi2 = np.nansum(np.where(expected > 0, (table - expected) ** 2 / expected, 0.0))
+        denom = n * (min(K, M) - 1)
+        return float(np.sqrt(chi2 / denom)) if denom > 0 else float("nan")
 

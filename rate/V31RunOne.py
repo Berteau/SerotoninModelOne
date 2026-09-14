@@ -11,7 +11,9 @@ import numpy as np
 
 from rate.RetinotopicGrandPlanParams import buildGrandPlanParams
 from rate.RetinotopicV31Simulation import RetinotopicV31Simulation
-from rate.StructuredInput import StructuredInputSet, ImageFolderInputSet, SequencePresenter
+from rate.StructuredInput import (StructuredInputSet, ImageFolderInputSet,
+                                  SequencePresenter, AudioStimulusBank,
+                                  PairedSequencePresenter)
 
 '''
 Run ONE v3.1 simulation (one mode x one plasticity condition x one classifier)
@@ -34,7 +36,10 @@ FIELDS = ["recTime", "assignedCluster", "mappedLabel", "trueClass", "clipIdRec",
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", required=True)
-    ap.add_argument("--images", default=None, help="folder of per-class subfolders; omit for synthetic")
+    ap.add_argument("--visual", default=None, help="visual_stimuli root (per-class image subfolders); pair with --audio")
+    ap.add_argument("--audio", default=None, help="audio_stimuli root (per-class .txt band-power subfolders); pair with --visual")
+    ap.add_argument("--images", default=None, help="single image root + SYNTHETIC audio (legacy path); omit for synthetic")
+    ap.add_argument("--audio-normalize", default="minmax", choices=["minmax", "peak", "none"])
     ap.add_argument("--mode", default="blind", choices=["blind", "scotoma"])
     ap.add_argument("--plasticity", type=int, default=1)
     ap.add_argument("--classifier", default="FUZZY_ART", choices=["FUZZY_ART", "FUZZY_ARTMAP", "KNN"])
@@ -55,16 +60,31 @@ def main():
 
     random.seed(args.seed); np.random.seed(args.seed)
 
-    if args.images:
+    audioBank = None
+    if bool(args.visual) != bool(args.audio):
+        ap.error("--visual and --audio must be given together (real paired stimuli)")
+
+    if args.visual and args.audio:
+        # Real paired stimuli: images + real per-class audio band-power vectors.
+        audioBank = AudioStimulusBank(args.audio, normalize=args.audio_normalize)
+        data = ImageFolderInputSet(args.visual, gridSize=args.grid,
+                                   audioBins=audioBank.audioBins,
+                                   imagesPerClass=args.images_per_class, seed=args.seed)
+        nClasses = len(data.classNames)
+        audioBins = audioBank.audioBins
+    elif args.images:
         data = ImageFolderInputSet(args.images, gridSize=args.grid, audioBins=20,
                                    imagesPerClass=args.images_per_class, seed=args.seed)
         nClasses = len(data.classNames)
+        audioBins = 20
     else:
         data = StructuredInputSet(gridSize=args.grid, audioBins=20,
                                   classCount=args.classes, seed=args.seed)
         nClasses = args.classes
+        audioBins = 20
 
     p = buildGrandPlanParams(gridSize=args.grid, cellsPerColumn=args.cpc, categoryCount=nClasses)
+    p["audioBins"] = audioBins           # network AudioInput size must match the clips
     p["emergent5HT"] = True
     p["classifierType"] = args.classifier
     p["classifierLearningRate"] = args.classifier_lr
@@ -75,8 +95,12 @@ def main():
     p["snapshotEvery"] = args.snapshot_every
     p["soundClassMatchProb"] = args.match_prob
 
-    presenter = SequencePresenter(data, soundBankSize=args.sound_bank_size,
-                                  matchProb=args.match_prob, seed=args.seed)
+    if audioBank is not None:
+        presenter = PairedSequencePresenter(data, audioBank,
+                                            matchProb=args.match_prob, seed=args.seed)
+    else:
+        presenter = SequencePresenter(data, soundBankSize=args.sound_bank_size,
+                                      matchProb=args.match_prob, seed=args.seed)
 
     sim = RetinotopicV31Simulation(p, presenter, mode=args.mode,
                                    plasticityEnabled=bool(args.plasticity), seed=args.seed)
@@ -88,7 +112,10 @@ def main():
     blob["mode"] = args.mode
     blob["plasticity"] = bool(args.plasticity)
     blob["classifier"] = args.classifier
-    blob["soundBankSize"] = presenter.bank.size
+    blob["audioBins"] = audioBins
+    blob["soundBankSize"] = (presenter.bank.size if hasattr(presenter, "bank")
+                             else len(audioBank.flat))
+    blob["audioSource"] = "real" if audioBank is not None else "synthetic"
     with open(args.out, "wb") as fh:
         pickle.dump(blob, fh)
     n = len(sim.assignedCluster)

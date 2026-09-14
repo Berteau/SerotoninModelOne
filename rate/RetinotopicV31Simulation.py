@@ -93,8 +93,7 @@ class RetinotopicV31Simulation(RetinotopicGrandPlanSimulation):
         for st in self.presenter.inputSet.stimuli:
             self.network.resetActivity()
             self.network.setVisualRates(self.presenter.inputSet.visualRates(st))
-            clip = self.presenter.bank.canonical_clip(st.label)
-            self.network.setAudioRates(self.presenter.audioRates(clip))
+            self.network.setAudioRates(self.presenter.canonical_audio_rates(st.label))
             for _ in range(steps):
                 self.network.step()
             X.append(self.network.v1FeatureVector())
@@ -102,11 +101,11 @@ class RetinotopicV31Simulation(RetinotopicGrandPlanSimulation):
         self.classifier.pretrain(X, y)
 
     # --- one image presentation ---
-    def _present(self, stimIndex, clipId, tMs, deprived, learn):
+    def _present(self, stimIndex, audioRef, tMs, deprived, learn):
         self.network.setVisualRates(self.presenter.visualRates(stimIndex))
         if deprived:
             self.network.setVisualScotoma(self.silencedColumns)   # re-mask after setVisualRates
-        self.network.setAudioRates(self.presenter.audioRates(clipId))
+        self.network.setAudioRates(self.presenter.audioRatesForPresentation(audioRef))
         steps = int(round(self.presentationMs / self.tau))
         for _ in range(steps):
             if self._controllerActive:
@@ -125,7 +124,7 @@ class RetinotopicV31Simulation(RetinotopicGrandPlanSimulation):
         self.assignedCluster.append(cluster)
         self.mappedLabel.append(label)
         self.trueClass.append(self.presenter.true_label(stimIndex))
-        self.clipIdRec.append(clipId)
+        self.clipIdRec.append(self.presenter.audio_class_of(audioRef))
         self.confidence.append(conf)
         self.rateDeprivedSeq.append(float(np.mean([c.rate for c in sc])) if sc else float("nan"))
         self.rateIntactSeq.append(float(np.mean([c.rate for c in self.intactCells])) if self.intactCells else float("nan"))
