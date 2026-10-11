@@ -43,14 +43,16 @@ def main():
     ap.add_argument("--mode", default="blind", choices=["blind", "scotoma"])
     ap.add_argument("--plasticity", type=int, default=1)
     ap.add_argument("--classifier", default="FUZZY_ART", choices=["FUZZY_ART", "FUZZY_ARTMAP", "KNN"])
-    ap.add_argument("--classifier-lr", type=float, default=0.05)
+    ap.add_argument("--classifier-lr", type=float, default=0.05, help="SLOW trial-time learning rate")
+    ap.add_argument("--pretrain-rate", type=float, default=1.0, help="FAST rate used only during pretraining (ART)")
+    ap.add_argument("--pretrain-epochs", type=int, default=8, help="pretrain passes to form visual categories")
     ap.add_argument("--remap-lr", type=float, default=None, help="gamma_p; default = params/10")
     ap.add_argument("--grid", type=int, default=10)
     ap.add_argument("--cpc", type=int, default=8)
     ap.add_argument("--classes", type=int, default=3, help="synthetic only")
     ap.add_argument("--images-per-class", type=int, default=3)
     ap.add_argument("--presentation-ms", type=float, default=100.0)
-    ap.add_argument("--baseline-ms", type=float, default=2000.0)
+    ap.add_argument("--baseline-ms", type=float, default=10000.0)
     ap.add_argument("--postloss-ms", type=float, default=20000.0)
     ap.add_argument("--sound-bank-size", type=int, default=None)
     ap.add_argument("--match-prob", type=float, default=0.25)
@@ -88,6 +90,8 @@ def main():
     p["emergent5HT"] = True
     p["classifierType"] = args.classifier
     p["classifierLearningRate"] = args.classifier_lr
+    p["classifierPretrainRate"] = args.pretrain_rate
+    p["classifierPretrainEpochs"] = args.pretrain_epochs
     p["gamma_p"] = args.remap_lr if args.remap_lr is not None else p["gamma_p"] / 10.0
     p["presentationMs"] = args.presentation_ms
     p["baselineMs"] = args.baseline_ms

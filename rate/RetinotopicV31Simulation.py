@@ -42,7 +42,7 @@ class RetinotopicV31Simulation(RetinotopicGrandPlanSimulation):
         self.seed = seed
 
         self.presentationMs = float(p.get("presentationMs", 100.0))
-        self.baselineMs = float(p.get("baselineMs", 2000.0))
+        self.baselineMs = float(p.get("baselineMs", 10000.0))
         self.postLossMs = float(p.get("postLossMs", 20000.0))
         self.snapshotEvery = int(p.get("snapshotEvery", 20))
         self._aEMA = None
@@ -56,6 +56,8 @@ class RetinotopicV31Simulation(RetinotopicGrandPlanSimulation):
             vigilance=p.get("artVigilance", 0.75),
             activityFloor=p.get("artActivityFloor", 0.05),
             knnDistanceVigilance=p.get("knnDistanceVigilance", 0.30),
+            pretrainRate=p.get("classifierPretrainRate", 1.0),
+            pretrainEpochs=p.get("classifierPretrainEpochs", 8),
             seed=seed)
 
         # Records (per presentation).

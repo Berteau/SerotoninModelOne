@@ -37,17 +37,21 @@ KINDS = (FUZZY_ART, FUZZY_ARTMAP, KNN)
 
 
 def make_classifier(kind, dim, learningRate, vigilance=0.75,
-                    activityFloor=0.05, knnDistanceVigilance=0.30, seed=0):
+                    activityFloor=0.05, knnDistanceVigilance=0.30,
+                    pretrainRate=1.0, pretrainEpochs=5, seed=0):
     if kind == FUZZY_ART:
         return UnsupervisedFuzzyART(dim, beta=learningRate, vigilance=vigilance,
-                                    activityFloor=activityFloor)
+                                    activityFloor=activityFloor,
+                                    pretrainRate=pretrainRate, pretrainEpochs=pretrainEpochs)
     if kind == FUZZY_ARTMAP:
         return SupervisedFuzzyARTMAP(dim, beta=learningRate, vigilance=vigilance,
-                                     activityFloor=activityFloor)
+                                     activityFloor=activityFloor,
+                                     pretrainRate=pretrainRate, pretrainEpochs=pretrainEpochs)
     if kind == KNN:
         return OnlineKNN(dim, learningRate=learningRate,
                          distanceVigilance=knnDistanceVigilance,
-                         activityFloor=activityFloor, seed=seed)
+                         activityFloor=activityFloor,
+                         pretrainEpochs=pretrainEpochs, seed=seed)
     raise ValueError("Unknown classifierType %r (expected one of %s)" % (kind, KINDS))
 
 
@@ -64,11 +68,18 @@ class _ARTBase:
     """Shared plumbing over a FuzzyART instance (complement coding, choice/match,
     activity gate, cluster->class majority map)."""
 
-    def __init__(self, dim, beta, vigilance, activityFloor):
+    def __init__(self, dim, beta, vigilance, activityFloor,
+                 pretrainRate=1.0, pretrainEpochs=5):
         self.kind = None
         self.dim = int(dim)
+        # beta is the SLOW trial-time learning rate; pretrain runs at the fast
+        # pretrainRate over pretrainEpochs so the categories are properly
+        # established before the slow continuous drift begins.
         self.art = FuzzyART(dim=dim, vigilance=vigilance, alpha=0.01,
                             beta=float(beta), activity_floor=activityFloor)
+        self.learn_beta = float(beta)
+        self.pretrain_beta = float(pretrainRate)
+        self.pretrain_epochs = int(pretrainEpochs)
         self.cluster_to_class = {}
 
     @property
@@ -128,17 +139,22 @@ class _ARTBase:
 
 
 class UnsupervisedFuzzyART(_ARTBase):
-    def __init__(self, dim, beta, vigilance, activityFloor):
-        super().__init__(dim, beta, vigilance, activityFloor)
+    def __init__(self, dim, beta, vigilance, activityFloor,
+                 pretrainRate=1.0, pretrainEpochs=5):
+        super().__init__(dim, beta, vigilance, activityFloor, pretrainRate, pretrainEpochs)
         self.kind = FUZZY_ART
 
     def pretrain(self, X, y):
-        # Unsupervised clustering of the pretrain features, then label each
-        # resulting cluster by the majority true class that landed in it.
-        assigned = []
-        for x in X:
-            assigned.append(self._recode_or_commit(x))
-        # a second no-learn pass gives stable final-cluster assignments to map
+        # Establish the categories at the FAST pretrain rate over several epochs,
+        # then drop to the slow trial rate. (Learning at the slow trial rate here
+        # would barely form the templates -- the categories must be properly
+        # learned from vision before deprivation.)
+        self.art.beta = self.pretrain_beta
+        for _ in range(max(1, self.pretrain_epochs)):
+            for x in X:
+                self._recode_or_commit(x)
+        self.art.beta = self.learn_beta
+        # label each resulting cluster by the majority true class that lands in it
         final = [self.observe(x)[0] for x in X]
         self.cluster_to_class = _majority_map(
             [c for c in final if c != REJECT],
@@ -147,14 +163,19 @@ class UnsupervisedFuzzyART(_ARTBase):
 
 
 class SupervisedFuzzyARTMAP(_ARTBase):
-    def __init__(self, dim, beta, vigilance, activityFloor):
-        super().__init__(dim, beta, vigilance, activityFloor)
+    def __init__(self, dim, beta, vigilance, activityFloor,
+                 pretrainRate=1.0, pretrainEpochs=5):
+        super().__init__(dim, beta, vigilance, activityFloor, pretrainRate, pretrainEpochs)
         self.kind = FUZZY_ARTMAP
 
     def pretrain(self, X, y):
-        # Supervised ARTMAP training (match tracking on labels).
-        for x, label in zip(X, y):
-            self.art.train_one(x, label)
+        # Supervised ARTMAP training (match tracking on labels) at the fast
+        # pretrain rate over several epochs, then drop to the slow trial rate.
+        self.art.beta = self.pretrain_beta
+        for _ in range(max(1, self.pretrain_epochs)):
+            for x, label in zip(X, y):
+                self.art.train_one(x, label)
+        self.art.beta = self.learn_beta
         # cluster i already carries its trained label
         self.cluster_to_class = {i: lbl for i, lbl in enumerate(self.art.labels)}
         return self
@@ -178,12 +199,14 @@ class OnlineKNN:
     than distanceVigilance (in normalized feature distance) from all of them.
     """
 
-    def __init__(self, dim, learningRate, distanceVigilance, activityFloor, seed=0):
+    def __init__(self, dim, learningRate, distanceVigilance, activityFloor,
+                 pretrainEpochs=5, seed=0):
         self.kind = KNN
         self.dim = int(dim)
         self.eta = float(learningRate)
         self.dvig = float(distanceVigilance)
         self.activity_floor = None if activityFloor is None else float(activityFloor)
+        self.pretrain_epochs = int(pretrainEpochs)
         self.protos = []                 # list of length-dim vectors in [0,1]
         self.cluster_to_class = {}
         self.rng = np.random.RandomState(seed)

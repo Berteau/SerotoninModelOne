@@ -119,10 +119,13 @@ def buildGrandPlanParams(gridSize=10, cellsPerColumn=8, categoryCount=2):
     # DECOUPLED, runtime-set rates: the first drives activity recovery, the
     # second is the slow category learning. See V3.1_Plan.md.
     params["classifierType"] = "FUZZY_ART"       # FUZZY_ART | FUZZY_ARTMAP | KNN
-    params["classifierLearningRate"] = 0.05      # ART beta / KNN centroid step (SLOW)
+    params["classifierLearningRate"] = 0.05      # ART beta / KNN centroid step (SLOW, trial-time)
+    params["classifierPretrainRate"] = 1.0       # FAST rate used ONLY during pretraining (ART beta)
+    params["classifierPretrainEpochs"] = 8       # pretrain passes over the stimuli to form categories
     params["knnDistanceVigilance"] = 0.30        # KNN: spawn a new prototype beyond this dist
     params["presentationMs"] = 100.0             # duration of each image presentation
-    params["baselineMs"] = 2000.0                # sighted baseline (plasticity ON)
+    params["baselineMs"] = 10000.0               # sighted baseline (plasticity ON); long enough to
+                                                 # consolidate the visual categories before the loss
     params["postLossMs"] = 20000.0               # deprivation -> recovery -> long stable window
     params["snapshotEvery"] = 20                 # presentations between classifier snapshots
     params["soundBankSize"] = None               # None -> = class count; may exceed it
