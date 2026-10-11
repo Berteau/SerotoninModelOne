@@ -46,6 +46,7 @@ def main():
     ap.add_argument("--classifier-lr", type=float, default=0.05, help="SLOW trial-time learning rate")
     ap.add_argument("--pretrain-rate", type=float, default=1.0, help="FAST rate used only during pretraining (ART)")
     ap.add_argument("--pretrain-epochs", type=int, default=8, help="pretrain passes to form visual categories")
+    ap.add_argument("--vigilance", type=float, default=None, help="ART vigilance (cluster granularity); higher -> more, finer clusters")
     ap.add_argument("--remap-lr", type=float, default=None, help="gamma_p; default = params/10")
     ap.add_argument("--grid", type=int, default=10)
     ap.add_argument("--cpc", type=int, default=8)
@@ -92,6 +93,8 @@ def main():
     p["classifierLearningRate"] = args.classifier_lr
     p["classifierPretrainRate"] = args.pretrain_rate
     p["classifierPretrainEpochs"] = args.pretrain_epochs
+    if args.vigilance is not None:
+        p["artVigilance"] = args.vigilance
     p["gamma_p"] = args.remap_lr if args.remap_lr is not None else p["gamma_p"] / 10.0
     p["presentationMs"] = args.presentation_ms
     p["baselineMs"] = args.baseline_ms
