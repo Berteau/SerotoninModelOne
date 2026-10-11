@@ -122,6 +122,9 @@ def buildGrandPlanParams(gridSize=10, cellsPerColumn=8, categoryCount=2):
     params["classifierLearningRate"] = 0.05      # ART beta / KNN centroid step (SLOW, trial-time)
     params["classifierPretrainRate"] = 1.0       # FAST rate used ONLY during pretraining (ART beta)
     params["classifierPretrainEpochs"] = 8       # pretrain passes over the stimuli to form categories
+    params["classifierPretrainExposures"] = 4    # sighted exposures PER stimulus collected for pretrain
+                                                 # (features gathered under trial conditions: carryover,
+                                                 # real clip pairing, presentationMs settle)
     params["knnDistanceVigilance"] = 0.30        # KNN: spawn a new prototype beyond this dist
     params["presentationMs"] = 100.0             # duration of each image presentation
     params["baselineMs"] = 10000.0               # sighted baseline (plasticity ON); long enough to

@@ -88,18 +88,27 @@ class RetinotopicV31Simulation(RetinotopicGrandPlanSimulation):
             self._aEMA += (dt / self._aEMAtau) * (inst - self._aEMA)
         return self._aEMA
 
-    # --- classifier pretraining on clean-V1 features (vision + canonical clip) ---
-    def _pretrainClassifier(self, settleMs):
-        steps = int(round(settleMs / self.tau))
+    # --- classifier pretraining on TRIAL-DISTRIBUTION features ---
+    def _pretrainClassifier(self):
+        # Collect features the SAME way the trial produces them: a short SIGHTED
+        # exposure sequence (clean vision, real clip pairing, presentationMs per
+        # image, carryover between presentations) -- NOT isolated fully-settled
+        # stimuli. Otherwise the templates are built on a feature distribution the
+        # trial never reproduces, and trial inputs resonate with the wrong (or
+        # unlabelled) clusters. Plasticity is still off here, so this is purely
+        # "learn the visual categories" before the loss.
+        nStim = len(self.presenter.inputSet.stimuli)
+        nExp = max(nStim * int(self.params.get("classifierPretrainExposures", 4)), nStim)
+        seq = self.presenter.generate_sequence(nExp, seed=self.seed + 777)
+        pres_steps = int(round(self.presentationMs / self.tau))
         X, y = [], []
-        for st in self.presenter.inputSet.stimuli:
-            self.network.resetActivity()
-            self.network.setVisualRates(self.presenter.inputSet.visualRates(st))
-            self.network.setAudioRates(self.presenter.canonical_audio_rates(st.label))
-            for _ in range(steps):
+        for si, aref in seq:
+            self.network.setVisualRates(self.presenter.visualRates(si))   # sighted (no scotoma)
+            self.network.setAudioRates(self.presenter.audioRatesForPresentation(aref))
+            for _ in range(pres_steps):
                 self.network.step()
-            X.append(self.network.v1FeatureVector())
-            y.append(st.label)
+            X.append(self.network.v1FeatureVector().copy())
+            y.append(self.presenter.true_label(si))
         self.classifier.pretrain(X, y)
 
     # --- one image presentation ---
@@ -141,10 +150,10 @@ class RetinotopicV31Simulation(RetinotopicGrandPlanSimulation):
         # Turn off the heavy per-cell history (unused; memory).
         self.network.setCellHistoryRecording(False)
 
-        # Pretrain the classifier on clean V1, then warm up the network.
-        self._pretrainClassifier(p.get("artPretrainSettleMs", 200.0))
-        self.network.resetActivity()
+        # Warm up the network, then pretrain the classifier on sighted
+        # trial-distribution features.
         self._stepFor(self.warmupMs, record=False)
+        self._pretrainClassifier()
 
         # Plasticity ON from the sighted baseline (cross-modal drive can build).
         if self.plasticityEnabled:

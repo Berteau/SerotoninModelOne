@@ -133,6 +133,21 @@ class _ARTBase:
     def learn(self, x):
         self._recode_or_commit(x)
 
+    def _label_all_clusters(self, X, y):
+        # Guarantee EVERY committed cluster has a class label. A cluster can be the
+        # best-resonant for a trial input even if no pretrain exemplar's best match
+        # was it (distribution shift); without a label it would silently read out
+        # as REJECT. Any cluster missing from the majority map is labelled by the
+        # class of the pretrain exemplar whose feature best matches its template.
+        if not X:
+            return
+        Is = [self.art._complement(self.art._clip01(x)) for x in X]
+        for j in range(self.art.n_categories):
+            if j in self.cluster_to_class:
+                continue
+            ms = [self.art._match(I, self.art.weights[j]) for I in Is]
+            self.cluster_to_class[j] = y[int(np.argmax(ms))]
+
     def snapshot(self):
         return {"n_clusters": self.n_clusters,
                 "cluster_to_class": dict(self.cluster_to_class)}
@@ -159,6 +174,7 @@ class UnsupervisedFuzzyART(_ARTBase):
         self.cluster_to_class = _majority_map(
             [c for c in final if c != REJECT],
             [yy for c, yy in zip(final, y) if c != REJECT])
+        self._label_all_clusters(X, y)
         return self
 
 
