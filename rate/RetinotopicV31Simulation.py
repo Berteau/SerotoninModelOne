@@ -74,6 +74,7 @@ class RetinotopicV31Simulation(RetinotopicGrandPlanSimulation):
         self.audioCurrentSeq = []
         self.visualCurrentSeq = []
         self.nClustersSeq = []
+        self.featureSeq = []         # the V1 feature vector classified each presentation
         self.snapshots = []          # (presentationIndex, snapshot dict)
         self.lossPresentationIndex = None
         self.clipClassAssociation = None
@@ -129,6 +130,7 @@ class RetinotopicV31Simulation(RetinotopicGrandPlanSimulation):
         cluster, label, conf = self.classifier.observe(feat)
         if learn:
             self.classifier.learn(feat)
+        self.featureSeq.append(np.asarray(feat, dtype=np.float32).copy())
 
         sc = self.deprivedCells
         self.recTime.append(tMs)

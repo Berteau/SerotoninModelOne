@@ -29,8 +29,8 @@ so the pipeline is runnable/testable stand-alone.
 FIELDS = ["recTime", "assignedCluster", "mappedLabel", "trueClass", "clipIdRec",
           "confidence", "rateDeprivedSeq", "rateIntactSeq", "homeostaticDriveSeq",
           "remapWeightSeq", "audioCurrentSeq", "visualCurrentSeq", "nClustersSeq",
-          "snapshots", "lossPresentationIndex", "A_set", "clipClassAssociation",
-          "presentationMs", "baselineMs", "postLossMs"]
+          "featureSeq", "snapshots", "lossPresentationIndex", "A_set",
+          "clipClassAssociation", "presentationMs", "baselineMs", "postLossMs"]
 
 
 def main():
@@ -125,12 +125,27 @@ def main():
     blob["audioSource"] = "real" if audioBank is not None else "synthetic"
     with open(args.out, "wb") as fh:
         pickle.dump(blob, fh)
-    n = len(sim.assignedCluster)
+
+    # Baseline (pre-loss) cluster plot in PCA space + separability readout, so a
+    # vigilance run shows HOW the clusters separate the classes, not just a scalar.
+    from rate.plotting_v31 import plot_baseline_clusters, separability
+    figpath = os.path.splitext(args.out)[0] + "_baseline_clusters.png"
+    title = "%s v=%s" % (args.classifier, ("%.2f" % p["artVigilance"]))
+    plot_baseline_clusters(blob, figpath, title_prefix=title)
+    li = sim.lossPresentationIndex or len(sim.assignedCluster)
+    import numpy as _np
+    base_nc = sim.nClustersSeq[li - 1] if li else -1
+    wi, be, ratio = separability(sim.featureSeq[:li], sim.trueClass[:li]) if li > 2 else (0, 0, float("nan"))
+    mp = _np.array(sim.mappedLabel[:li]); tc = _np.array(sim.trueClass[:li])
     print("wrote %s (classifier=%s mode=%s plast=%s): %d presentations, "
           "final n_clusters=%d, clip-class assoc=%.3f"
-          % (args.out, args.classifier, args.mode, bool(args.plasticity), n,
-             sim.nClustersSeq[-1] if sim.nClustersSeq else -1,
+          % (args.out, args.classifier, args.mode, bool(args.plasticity),
+             len(sim.assignedCluster), sim.nClustersSeq[-1] if sim.nClustersSeq else -1,
              sim.clipClassAssociation if sim.clipClassAssociation is not None else float("nan")))
+    print("  BASELINE: n_clusters=%d  between/within RMS=%.2f  reject=%.2f correct=%.2f wrong=%.2f"
+          % (base_nc, ratio, _np.mean(mp == -1), _np.mean(mp == tc),
+             _np.mean((mp >= 0) & (mp != tc))))
+    print("  baseline cluster scatter -> %s" % figpath)
 
 
 if __name__ == "__main__":

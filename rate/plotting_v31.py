@@ -143,3 +143,76 @@ def plot_v31(blob, outdir, title_prefix):
     pth = os.path.join(outdir, "hallucination.png"); fig.savefig(pth, dpi=110); plt.close(fig); paths.append(pth)
 
     return paths, s
+
+
+def separability(features, labels):
+    """Within- vs between-class RMS distance in feature space. ratio > 1 means
+    classes are, on average, farther apart than samples within a class (good)."""
+    X = np.asarray(features, dtype=float); y = np.asarray(labels)
+    classes = sorted(set(y.tolist()))
+    cm = {c: X[y == c].mean(0) for c in classes}
+    within = np.mean([np.sqrt(((X[y == c] - cm[c]) ** 2).mean()) for c in classes if np.any(y == c)])
+    pairs = [(i, j) for i in classes for j in classes if i < j]
+    between = np.mean([np.sqrt(((cm[i] - cm[j]) ** 2).mean()) for i, j in pairs]) if pairs else float("nan")
+    return float(within), float(between), float(between / within) if within else float("nan")
+
+
+def plot_baseline_clusters(blob, outpath, title_prefix=""):
+    """PCA (first 2 PCs) scatter of the SIGHTED-BASELINE V1 features (pre-loss),
+    colour = assigned cluster, marker = true visual class. Shows directly how well
+    the classifier's clusters separate the classes before deprivation, for tuning
+    vigilance. Returns outpath (or None if features were not recorded)."""
+    from matplotlib.lines import Line2D
+    from matplotlib.patches import Patch
+    feats = blob.get("featureSeq")
+    if not feats:
+        return None
+    li = blob["lossPresentationIndex"] or len(feats)
+    X = np.asarray(feats[:li], dtype=float)
+    cl = np.asarray(blob["assignedCluster"][:li])
+    tc = np.asarray(blob["trueClass"][:li])
+    if len(X) < 3:
+        return None
+    classNames = blob.get("classNames") or [str(i) for i in sorted(set(tc.tolist()))]
+    vig = blob.get("params", {}).get("artVigilance", None)
+
+    # PCA via SVD on mean-centred features
+    mu = X.mean(0); Xc = X - mu
+    _, S, Vt = np.linalg.svd(Xc, full_matrices=False)
+    proj = Xc @ Vt[:2].T
+    ev = (S ** 2); ev = ev / ev.sum() if ev.sum() else ev
+
+    wi, be, ratio = separability(X, tc)
+
+    markers = ["o", "s", "^", "D", "v", "P", "X", "*", "<", ">", "p", "h"]
+    clusters = sorted(set(cl.tolist()))
+    cmap = plt.get_cmap("tab10" if len(clusters) <= 10 else "tab20")
+    cof = {c: cmap(i % cmap.N) for i, c in enumerate(clusters)}
+
+    fig, ax = plt.subplots(figsize=(7.5, 6))
+    for cls in sorted(set(tc.tolist())):
+        for cu in clusters:
+            m = (tc == cls) & (cl == cu)
+            if not m.any():
+                continue
+            ax.scatter(proj[m, 0], proj[m, 1], color=[cof[cu]],
+                       marker=markers[cls % len(markers)], s=42,
+                       edgecolor="k", linewidth=0.3, alpha=0.85)
+    ax.set_xlabel("PC1 (%.0f%% var)" % (100 * ev[0]))
+    ax.set_ylabel("PC2 (%.0f%% var)" % (100 * ev[1]))
+    ttl = "%s baseline V1 features: colour=cluster, marker=class" % (title_prefix + ":" if title_prefix else "")
+    sub = "vigilance=%s  baseline clusters=%d  between/within RMS=%.2f" % (
+        ("%.2f" % vig) if vig is not None else "?", len(clusters), ratio)
+    ax.set_title(ttl + "\n" + sub, fontsize=10)
+
+    class_handles = [Line2D([0], [0], marker=markers[cls % len(markers)], color="w",
+                            markerfacecolor="0.6", markeredgecolor="k",
+                            label="class: %s" % classNames[cls]) for cls in sorted(set(tc.tolist()))]
+    cluster_handles = [Patch(facecolor=cof[cu], edgecolor="k",
+                             label="cluster %d" % cu if cu >= 0 else "reject") for cu in clusters]
+    leg1 = ax.legend(handles=class_handles, loc="upper left", fontsize=8, title="true class")
+    ax.add_artist(leg1)
+    ax.legend(handles=cluster_handles, loc="upper right", fontsize=8, title="assigned cluster")
+    fig.tight_layout()
+    fig.savefig(outpath, dpi=120); plt.close(fig)
+    return outpath
