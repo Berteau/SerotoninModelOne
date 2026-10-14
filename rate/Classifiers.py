@@ -33,12 +33,18 @@ same hallucination / emergence metrics apply regardless of backend.
 FUZZY_ART = "FUZZY_ART"
 FUZZY_ARTMAP = "FUZZY_ARTMAP"
 KNN = "KNN"
-KINDS = (FUZZY_ART, FUZZY_ARTMAP, KNN)
+KOHONEN_SOM = "KOHONEN_SOM"
+KINDS = (KOHONEN_SOM, FUZZY_ART, FUZZY_ARTMAP, KNN)
 
 
 def make_classifier(kind, dim, learningRate, vigilance=0.75,
                     activityFloor=0.05, knnDistanceVigilance=0.30,
-                    pretrainRate=1.0, pretrainEpochs=5, seed=0):
+                    pretrainRate=1.0, pretrainEpochs=5, classCount=None,
+                    somSide=None, seed=0):
+    if kind == KOHONEN_SOM:
+        return SelfOrganizingMap(dim, learningRate=learningRate, side=somSide,
+                                 classCount=classCount, activityFloor=activityFloor,
+                                 pretrainEpochs=pretrainEpochs, seed=seed)
     if kind == FUZZY_ART:
         return UnsupervisedFuzzyART(dim, beta=learningRate, vigilance=vigilance,
                                     activityFloor=activityFloor,
@@ -280,3 +286,105 @@ class OnlineKNN:
     def snapshot(self):
         return {"n_clusters": self.n_clusters,
                 "cluster_to_class": dict(self.cluster_to_class)}
+
+
+class SelfOrganizingMap:
+    """Kohonen self-organizing map as the unsupervised secondary area.
+
+    A 2-D grid of nodes, each with a weight vector in V1-feature space. Matching
+    is EUCLIDEAN (a shared common-mode / DC cancels in x - w, unlike fuzzy ART's
+    complement-coded min, which is why the SOM separates the continuous V1 rate
+    features fuzzy ART could not). The winner (BMU) and its grid neighbours move
+    toward the input; pretraining runs a decaying alpha/sigma schedule to organise
+    the map, then the trial uses a small fixed rate for slow drift.
+
+    Readout: BMU index is the "cluster"; its pretrain-majority true class is the
+    label (nodes never selected in pretrain are labelled by nearest exemplar, so
+    every node is covered). Emergence shows as the map re-tuning / assignments
+    migrating (node COUNT is fixed -- set side so there are spare nodes a new
+    audio-driven pattern can recruit), tracked by the ARI-vs-class / ARI-vs-clip
+    metrics rather than a growing cluster count.
+    """
+
+    def __init__(self, dim, learningRate, side=None, classCount=None,
+                 activityFloor=0.05, pretrainEpochs=8, seed=0):
+        import math
+        self.kind = KOHONEN_SOM
+        self.dim = int(dim)
+        self.eta = float(learningRate)                 # slow trial-time rate
+        self.pretrain_epochs = int(pretrainEpochs)
+        self.activity_floor = None if activityFloor is None else float(activityFloor)
+        k = max(int(classCount or 3), 1)
+        self.side = int(side) if side else max(3, int(math.ceil(math.sqrt(k * 4))))
+        self.n = self.side * self.side
+        self.rng = np.random.RandomState(seed)
+        gx, gy = np.meshgrid(np.arange(self.side), np.arange(self.side))
+        self.coords = np.stack([gy.ravel(), gx.ravel()], axis=1).astype(float)  # (n,2)
+        self.W = None
+        self.cluster_to_class = {}
+
+    @property
+    def n_clusters(self):
+        return self.n
+
+    def _clip01(self, x):
+        return np.clip(np.asarray(x, dtype=float).ravel(), 0.0, 1.0)
+
+    def _too_weak(self, x01):
+        return self.activity_floor is not None and float(np.mean(x01)) < self.activity_floor
+
+    def _bmu(self, x):
+        d2 = ((self.W - x) ** 2).sum(1)
+        return int(np.argmin(d2)), float(d2.min())
+
+    def _update(self, x, alpha, sigma):
+        bmu, _ = self._bmu(x)
+        dg2 = ((self.coords - self.coords[bmu]) ** 2).sum(1)      # grid distance^2
+        h = np.exp(-dg2 / (2.0 * sigma * sigma))                 # neighbourhood
+        self.W += (alpha * h)[:, None] * (x - self.W)
+
+    def pretrain(self, X, y):
+        X = [self._clip01(x) for x in X]
+        Xa = np.asarray(X)
+        # init nodes to random training samples (good SOM initialisation)
+        idx = self.rng.randint(0, len(Xa), size=self.n)
+        self.W = Xa[idx].copy() + self.rng.randn(self.n, self.dim) * 1e-3
+        # decaying schedule, enough iterations for a small map to organise
+        nIter = max(self.pretrain_epochs * len(Xa), 40 * self.n)
+        a0, aF = 0.5, 0.05
+        s0, sF = max(self.side / 2.0, 1.0), 0.7
+        order = self.rng.permutation(len(Xa))
+        for t in range(nIter):
+            frac = t / max(nIter - 1, 1)
+            alpha = a0 * (aF / a0) ** frac
+            sigma = s0 * (sF / s0) ** frac
+            x = Xa[order[t % len(Xa)]]
+            if t % len(Xa) == 0:
+                order = self.rng.permutation(len(Xa))
+            self._update(x, alpha, sigma)
+        # label nodes by majority true class of the pretrain inputs they win
+        bmus = [self._bmu(x)[0] for x in Xa]
+        self.cluster_to_class = _majority_map(bmus, list(y))
+        for i in range(self.n):                                  # full coverage
+            if i not in self.cluster_to_class:
+                di = ((Xa - self.W[i]) ** 2).sum(1)
+                self.cluster_to_class[i] = y[int(np.argmin(di))]
+        return self
+
+    def observe(self, x):
+        x01 = self._clip01(x)
+        if self._too_weak(x01) or self.W is None:
+            return (REJECT, REJECT, 0.0)
+        bmu, d2 = self._bmu(x01)
+        conf = 1.0 / (1.0 + np.sqrt(d2 / self.dim))
+        return (bmu, self.cluster_to_class.get(bmu, REJECT), float(conf))
+
+    def learn(self, x):
+        x01 = self._clip01(x)
+        if self._too_weak(x01) or self.W is None:
+            return
+        # slow drift: small fixed rate, tight neighbourhood
+        self._update(x01, self.eta, 1.0)
+
+    def snapshot(self):
+        return {"n_clusters": self.n, "cluster_to_class": dict(self.cluster_to_class)}

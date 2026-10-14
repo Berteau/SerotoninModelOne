@@ -50,7 +50,7 @@ class RetinotopicV31Simulation(RetinotopicGrandPlanSimulation):
 
         # Switchable classifier over the V1 feature (length nCols).
         self.classifier = make_classifier(
-            kind=p.get("classifierType", "FUZZY_ART"),
+            kind=p.get("classifierType", "KOHONEN_SOM"),
             dim=self.network.nCols,
             learningRate=p.get("classifierLearningRate", 0.05),
             vigilance=p.get("artVigilance", 0.75),
@@ -58,6 +58,8 @@ class RetinotopicV31Simulation(RetinotopicGrandPlanSimulation):
             knnDistanceVigilance=p.get("knnDistanceVigilance", 0.30),
             pretrainRate=p.get("classifierPretrainRate", 1.0),
             pretrainEpochs=p.get("classifierPretrainEpochs", 8),
+            classCount=p.get("categoryCount"),
+            somSide=p.get("somSide"),
             seed=seed)
 
         # Records (per presentation).

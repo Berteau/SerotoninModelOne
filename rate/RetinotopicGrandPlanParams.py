@@ -118,8 +118,9 @@ def buildGrandPlanParams(gridSize=10, cellsPerColumn=8, categoryCount=2):
     # remapLearningRate (= gamma_p) and classifierLearningRate are the two
     # DECOUPLED, runtime-set rates: the first drives activity recovery, the
     # second is the slow category learning. See V3.1_Plan.md.
-    params["classifierType"] = "FUZZY_ART"       # FUZZY_ART | FUZZY_ARTMAP | KNN
-    params["classifierLearningRate"] = 0.05      # ART beta / KNN centroid step (SLOW, trial-time)
+    params["classifierType"] = "KOHONEN_SOM"     # KOHONEN_SOM | FUZZY_ART | FUZZY_ARTMAP | KNN
+    params["classifierLearningRate"] = 0.05      # SOM alpha / ART beta / KNN step (SLOW, trial-time)
+    params["somSide"] = None                     # SOM grid side (None -> auto from class count)
     params["classifierPretrainRate"] = 1.0       # FAST rate used ONLY during pretraining (ART beta)
     params["classifierPretrainEpochs"] = 8       # pretrain passes over the stimuli to form categories
     params["classifierPretrainExposures"] = 4    # sighted exposures PER stimulus collected for pretrain

@@ -200,9 +200,10 @@ def plot_baseline_clusters(blob, outpath, title_prefix=""):
                        edgecolor="k", linewidth=0.3, alpha=0.85)
     ax.set_xlabel("PC1 (%.0f%% var)" % (100 * ev[0]))
     ax.set_ylabel("PC2 (%.0f%% var)" % (100 * ev[1]))
+    kind = blob.get("classifier", "")
     ttl = "%s baseline V1 features: colour=cluster, marker=class" % (title_prefix + ":" if title_prefix else "")
-    sub = "vigilance=%s  baseline clusters=%d  between/within RMS=%.2f" % (
-        ("%.2f" % vig) if vig is not None else "?", len(clusters), ratio)
+    detail = ("vigilance=%.2f  " % vig) if (vig is not None and "ART" in kind) else ""
+    sub = "%sdistinct baseline clusters=%d  between/within RMS=%.2f" % (detail, len(clusters), ratio)
     ax.set_title(ttl + "\n" + sub, fontsize=10)
 
     class_handles = [Line2D([0], [0], marker=markers[cls % len(markers)], color="w",

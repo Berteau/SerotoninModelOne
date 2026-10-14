@@ -43,11 +43,13 @@ def main():
     ap.add_argument("--audio-normalize", default="minmax", choices=["minmax", "peak", "none"])
     ap.add_argument("--mode", default="blind", choices=["blind", "scotoma"])
     ap.add_argument("--plasticity", type=int, default=1)
-    ap.add_argument("--classifier", default="FUZZY_ART", choices=["FUZZY_ART", "FUZZY_ARTMAP", "KNN"])
+    ap.add_argument("--classifier", default="KOHONEN_SOM",
+                    choices=["KOHONEN_SOM", "FUZZY_ART", "FUZZY_ARTMAP", "KNN"])
     ap.add_argument("--classifier-lr", type=float, default=0.05, help="SLOW trial-time learning rate")
     ap.add_argument("--pretrain-rate", type=float, default=1.0, help="FAST rate used only during pretraining (ART)")
     ap.add_argument("--pretrain-epochs", type=int, default=8, help="pretrain passes to form visual categories")
     ap.add_argument("--vigilance", type=float, default=None, help="ART vigilance (cluster granularity); higher -> more, finer clusters")
+    ap.add_argument("--som-size", type=int, default=None, help="SOM grid side (default auto from class count)")
     ap.add_argument("--remap-lr", type=float, default=None, help="gamma_p; default = params/10")
     ap.add_argument("--grid", type=int, default=10)
     ap.add_argument("--cpc", type=int, default=8)
@@ -114,6 +116,8 @@ def main():
     p["classifierPretrainEpochs"] = args.pretrain_epochs
     if args.vigilance is not None:
         p["artVigilance"] = args.vigilance
+    if args.som_size is not None:
+        p["somSide"] = args.som_size
     p["gamma_p"] = args.remap_lr if args.remap_lr is not None else p["gamma_p"] / 10.0
     p["presentationMs"] = args.presentation_ms
     p["baselineMs"] = args.baseline_ms
@@ -149,7 +153,7 @@ def main():
     # vigilance run shows HOW the clusters separate the classes, not just a scalar.
     from rate.plotting_v31 import plot_baseline_clusters, separability
     figpath = os.path.splitext(args.out)[0] + "_baseline_clusters.png"
-    title = "%s v=%s" % (args.classifier, ("%.2f" % p["artVigilance"]))
+    title = ("%s v=%.2f" % (args.classifier, p["artVigilance"])) if "ART" in args.classifier else args.classifier
     plot_baseline_clusters(blob, figpath, title_prefix=title)
     li = sim.lossPresentationIndex or len(sim.assignedCluster)
     import numpy as _np
