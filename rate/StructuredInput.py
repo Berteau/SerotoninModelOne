@@ -346,6 +346,98 @@ class ImageFolderInputSet(StructuredInputSet):
         return self._loadedGrids
 
 
+class SeparableBlockInputSet(StructuredInputSet):
+    """Synthetic stimuli designed to be SEPARABLE by the retinotopic + fuzzy-ART
+    pipeline, following the design rules derived from how the readout works:
+
+      * spatial segregation: each class's feature occupies a DISTINCT,
+        non-overlapping region of the grid (disjoint active-column support ->
+        near-orthogonal V1 features -> separable at any sane vigilance);
+      * registration: the feature is in the SAME cells in every exemplar (the
+        model is retinotopic -- position is identity), with only small additive
+        noise between exemplars (low within-class variance);
+      * bold / high-contrast / >=2 cells wide, so the edges survive edge-detection
+        and the G x G downsampling;
+      * sparse (low fill) -> low common DC, high active/inactive contrast.
+
+    Each class is a bold shape (cycled: block / v-bar / h-bar / cross / frame)
+    rendered inside its own region. examplesPerClass exemplars per class differ
+    only by Gaussian noise. Not meant to look like real categories yet -- just to
+    give the cortex something it can represent distinctly, so the serotonin /
+    remapping dynamics can be studied without a readout confound.
+    """
+
+    def __init__(self, gridSize=10, audioBins=22, classCount=3, examplesPerClass=4,
+                 noise=0.08, classNames=None, minRateHz=0.0, maxRateHz=30.0, seed=0):
+        self.examplesPerClass = int(examplesPerClass)
+        self.noise = float(noise)
+        self.classNames = classNames or ["class%d" % c for c in range(classCount)]
+        super().__init__(gridSize=gridSize, audioBins=audioBins, classCount=classCount,
+                         minRateHz=minRateHz, maxRateHz=maxRateHz, seed=seed)
+
+    def _block_positions(self, n, g):
+        import math
+        cols = int(math.ceil(math.sqrt(n)))
+        rows = int(math.ceil(n / cols))
+        ch, cw = g / rows, g / cols
+        rects = []
+        for i in range(n):
+            r, c = i // cols, i % cols
+            r0 = int(r * ch + ch * 0.22); r1 = int((r + 1) * ch - ch * 0.22)
+            c0 = int(c * cw + cw * 0.22); c1 = int((c + 1) * cw - cw * 0.22)
+            r1 = max(r1, r0 + 2); c1 = max(c1, c0 + 2)
+            rects.append((r0, min(r1, g), c0, min(c1, g)))
+        return rects
+
+    def _render_shape(self, rect, shape, g):
+        r0, r1, c0, c1 = rect
+        img = np.zeros((g, g))
+        rm = (r0 + r1) // 2; cm = (c0 + c1) // 2
+        if shape == 0:                      # filled block
+            img[r0:r1, c0:c1] = 1.0
+        elif shape == 1:                    # vertical bar
+            img[r0:r1, max(c0, cm - 1):min(c1, cm + 1)] = 1.0
+        elif shape == 2:                    # horizontal bar
+            img[max(r0, rm - 1):min(r1, rm + 1), c0:c1] = 1.0
+        elif shape == 3:                    # cross
+            img[r0:r1, max(c0, cm - 1):min(c1, cm + 1)] = 1.0
+            img[max(r0, rm - 1):min(r1, rm + 1), c0:c1] = 1.0
+        else:                               # frame
+            img[r0:r1, c0:c1] = 1.0
+            if r1 - r0 > 2 and c1 - c0 > 2:
+                img[r0 + 1:r1 - 1, c0 + 1:c1 - 1] = 0.0
+        return img
+
+    def _prototype_grids(self):
+        g = self.gridSize
+        rects = self._block_positions(self.classCount, g)
+        out = []
+        for c in range(self.classCount):
+            base = self._render_shape(rects[c], c % 5, g)
+            for _ in range(self.examplesPerClass):
+                img = np.clip(base + self.rng.randn(g, g) * self.noise, 0.0, 1.0)
+                out.append((c, img))
+        return out
+
+
+def save_stimuli_to_folder(inputSet, root):
+    """Write an InputSet's RAW (pre-edge-detection) class images to
+    root/<className>/imgNNN.png, one subfolder per class -- for inspection and for
+    reuse via --visual (optionally paired with real audio of matching class names)."""
+    from PIL import Image
+    names = getattr(inputSet, "classNames", None) or \
+        ["class%d" % c for c in range(inputSet.classCount)]
+    counts = {}
+    for st in inputSet.stimuli:
+        name = names[st.label]
+        d = os.path.join(root, name); os.makedirs(d, exist_ok=True)
+        k = counts.get(st.label, 0); counts[st.label] = k + 1
+        arr = (np.clip(st.visualGrid, 0, 1) * 255).astype("uint8")
+        Image.fromarray(arr, "L").save(os.path.join(d, "img%03d.png" % k))
+    return root
+
+
+
 def load_band_powers(path):
     """Parse an audio-stimulus .txt file: a line like
 

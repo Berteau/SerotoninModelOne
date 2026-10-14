@@ -13,7 +13,8 @@ from rate.RetinotopicGrandPlanParams import buildGrandPlanParams
 from rate.RetinotopicV31Simulation import RetinotopicV31Simulation
 from rate.StructuredInput import (StructuredInputSet, ImageFolderInputSet,
                                   SequencePresenter, AudioStimulusBank,
-                                  PairedSequencePresenter)
+                                  PairedSequencePresenter, SeparableBlockInputSet,
+                                  save_stimuli_to_folder)
 
 '''
 Run ONE v3.1 simulation (one mode x one plasticity condition x one classifier)
@@ -58,6 +59,11 @@ def main():
     ap.add_argument("--sound-bank-size", type=int, default=None)
     ap.add_argument("--match-prob", type=float, default=0.25)
     ap.add_argument("--snapshot-every", type=int, default=20)
+    ap.add_argument("--synthetic-blocks", action="store_true",
+                    help="use the SEPARABLE synthetic block stimuli (+ synthetic audio)")
+    ap.add_argument("--examples-per-class", type=int, default=4, help="synthetic-blocks exemplars per class")
+    ap.add_argument("--block-noise", type=float, default=0.08, help="synthetic-blocks per-exemplar noise")
+    ap.add_argument("--save-stimuli", default=None, help="write generated class images to this folder and exit")
     ap.add_argument("--seed", type=int, default=0)
     args = ap.parse_args()
 
@@ -75,6 +81,13 @@ def main():
                                    imagesPerClass=args.images_per_class, seed=args.seed)
         nClasses = len(data.classNames)
         audioBins = audioBank.audioBins
+    elif args.synthetic_blocks:
+        data = SeparableBlockInputSet(gridSize=args.grid, audioBins=20,
+                                      classCount=args.classes,
+                                      examplesPerClass=args.examples_per_class,
+                                      noise=args.block_noise, seed=args.seed)
+        nClasses = args.classes
+        audioBins = 20
     elif args.images:
         data = ImageFolderInputSet(args.images, gridSize=args.grid, audioBins=20,
                                    imagesPerClass=args.images_per_class, seed=args.seed)
@@ -85,6 +98,12 @@ def main():
                                   classCount=args.classes, seed=args.seed)
         nClasses = args.classes
         audioBins = 20
+
+    if args.save_stimuli:
+        save_stimuli_to_folder(data, args.save_stimuli)
+        print("wrote generated stimuli to %s (classes=%s)" %
+              (args.save_stimuli, getattr(data, "classNames", nClasses)))
+        return
 
     p = buildGrandPlanParams(gridSize=args.grid, cellsPerColumn=args.cpc, categoryCount=nClasses)
     p["audioBins"] = audioBins           # network AudioInput size must match the clips
