@@ -50,6 +50,8 @@ def main():
     ap.add_argument("--pretrain-epochs", type=int, default=8, help="pretrain passes to form visual categories")
     ap.add_argument("--vigilance", type=float, default=None, help="ART vigilance (cluster granularity); higher -> more, finer clusters")
     ap.add_argument("--som-size", type=int, default=None, help="SOM grid side (default auto from class count)")
+    ap.add_argument("--figdir", default=None, help="directory for figures (default <out>_figs)")
+    ap.add_argument("--no-plots", action="store_true", help="skip figure generation (pickle only)")
     ap.add_argument("--remap-lr", type=float, default=None, help="gamma_p; default = params/10")
     ap.add_argument("--grid", type=int, default=10)
     ap.add_argument("--cpc", type=int, default=8)
@@ -149,14 +151,9 @@ def main():
     with open(args.out, "wb") as fh:
         pickle.dump(blob, fh)
 
-    # Baseline (pre-loss) cluster plot in PCA space + separability readout, so a
-    # vigilance run shows HOW the clusters separate the classes, not just a scalar.
-    from rate.plotting_v31 import plot_baseline_clusters, separability
-    figpath = os.path.splitext(args.out)[0] + "_baseline_clusters.png"
-    title = ("%s v=%.2f" % (args.classifier, p["artVigilance"])) if "ART" in args.classifier else args.classifier
-    plot_baseline_clusters(blob, figpath, title_prefix=title)
-    li = sim.lossPresentationIndex or len(sim.assignedCluster)
     import numpy as _np
+    from rate.plotting_v31 import plot_baseline_clusters, plot_v31, separability
+    li = sim.lossPresentationIndex or len(sim.assignedCluster)
     base_nc = sim.nClustersSeq[li - 1] if li else -1
     wi, be, ratio = separability(sim.featureSeq[:li], sim.trueClass[:li]) if li > 2 else (0, 0, float("nan"))
     mp = _np.array(sim.mappedLabel[:li]); tc = _np.array(sim.trueClass[:li])
@@ -168,7 +165,19 @@ def main():
     print("  BASELINE: n_clusters=%d  between/within RMS=%.2f  reject=%.2f correct=%.2f wrong=%.2f"
           % (base_nc, ratio, _np.mean(mp == -1), _np.mean(mp == tc),
              _np.mean((mp >= 0) & (mp != tc))))
-    print("  baseline cluster scatter -> %s" % figpath)
+
+    if args.no_plots:
+        return
+    # All figures for the run, in one directory: the baseline PCA cluster scatter
+    # plus the time-series metrics (cluster count, ARI vs class / vs clip,
+    # hallucination rate).
+    figdir = args.figdir or (os.path.splitext(args.out)[0] + "_figs")
+    os.makedirs(figdir, exist_ok=True)
+    title = ("%s v=%.2f" % (args.classifier, p["artVigilance"])) if "ART" in args.classifier else args.classifier
+    plot_baseline_clusters(blob, os.path.join(figdir, "baseline_clusters.png"), title_prefix=title)
+    paths, _ = plot_v31(blob, figdir, "%s %s" % (args.classifier, args.mode))
+    print("  figures -> %s/ (baseline_clusters, %s)"
+          % (figdir, ", ".join(os.path.splitext(os.path.basename(p))[0] for p in paths)))
 
 
 if __name__ == "__main__":
