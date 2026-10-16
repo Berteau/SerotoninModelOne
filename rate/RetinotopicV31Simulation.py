@@ -75,6 +75,7 @@ class RetinotopicV31Simulation(RetinotopicGrandPlanSimulation):
         self.remapWeightSeq = []
         self.audioCurrentSeq = []
         self.visualCurrentSeq = []
+        self.topDownCurrentSeq = []
         self.nClustersSeq = []
         self.featureSeq = []         # the V1 feature vector classified each presentation
         self.snapshots = []          # (presentationIndex, snapshot dict)
@@ -146,7 +147,8 @@ class RetinotopicV31Simulation(RetinotopicGrandPlanSimulation):
         self.homeostaticDriveSeq.append(self.homeostaticH)
         self.remapWeightSeq.append(float(np.mean([a.weight for a in self.plasticAxons])) if self.plasticAxons else float("nan"))
         self.audioCurrentSeq.append(float(np.mean([c.lastSourceCurrent.get(self._audioPop, 0.0) for c in sc])) if sc else float("nan"))
-        self.visualCurrentSeq.append(float(np.mean([c.lastStreamCurrent[STREAM_TOPDOWN] for c in sc])) if sc else float("nan"))
+        self.visualCurrentSeq.append(float(np.mean([c.lastSourceCurrent.get(self._visualPop, 0.0) for c in sc])) if sc else float("nan"))
+        self.topDownCurrentSeq.append(float(np.mean([c.lastStreamCurrent[STREAM_TOPDOWN] for c in sc])) if sc else float("nan"))
         self.nClustersSeq.append(self.classifier.n_clusters)
 
     def run(self):

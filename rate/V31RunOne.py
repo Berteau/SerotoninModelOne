@@ -29,7 +29,8 @@ so the pipeline is runnable/testable stand-alone.
 
 FIELDS = ["recTime", "assignedCluster", "mappedLabel", "trueClass", "clipIdRec",
           "confidence", "rateDeprivedSeq", "rateIntactSeq", "homeostaticDriveSeq",
-          "remapWeightSeq", "audioCurrentSeq", "visualCurrentSeq", "nClustersSeq",
+          "remapWeightSeq", "audioCurrentSeq", "visualCurrentSeq", "topDownCurrentSeq",
+          "nClustersSeq",
           "featureSeq", "snapshots", "lossPresentationIndex", "A_set",
           "clipClassAssociation", "presentationMs", "baselineMs", "postLossMs"]
 
