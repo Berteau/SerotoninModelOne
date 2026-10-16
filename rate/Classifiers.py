@@ -379,6 +379,17 @@ class SelfOrganizingMap:
         conf = 1.0 / (1.0 + np.sqrt(d2 / self.dim))
         return (bmu, self.cluster_to_class.get(bmu, REJECT), float(conf))
 
+    def top_down_template(self, x):
+        # The winning node's weight vector (a V1-feature-space prototype of the
+        # recognised category) -- projected back as topographic top-down so an
+        # active category shifts V1 toward the recognised pattern. Zero when the
+        # input is too weak to evoke a percept (near-silent V1).
+        x01 = self._clip01(x)
+        if self.W is None or self._too_weak(x01):
+            return np.zeros(self.dim)
+        bmu, _ = self._bmu(x01)
+        return self.W[bmu].copy()
+
     def learn(self, x):
         x01 = self._clip01(x)
         if self._too_weak(x01) or self.W is None:

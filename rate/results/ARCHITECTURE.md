@@ -120,9 +120,21 @@ reduced somatic 5HT, raised cross-modal axonal 5HT, lowered plasticity
 threshold). Asymmetric ramp/relax time constants make it underdamped (transient
 hyperactivity overshoot). Only the sensory loss is imposed; the rest emerges.
 
-## 7. ⚠️ The two-classifier situation (the thing to decide)
+## 7. The classifier and the top-down loop
 
-**There are two separate "category" systems in v3.1, and they are not connected:**
+> **UPDATE (closed loop implemented).** The SOM now drives the Sulfaro top-down
+> directly: the winning node's weight vector (a V1-space template of the
+> recognised category) is projected back as **topographic** top-down each step,
+> via a `TopDown` population (`somTopDown=True`, SOM only). The untrained
+> `Category` layer is retired for the SOM path. Verified: the top-down now carries
+> class structure (separability 4.12 vs 0.50 before; SOM-on-top-down accuracy 1.00
+> vs 0.29). `somFeedbackGain` × the Sulfaro `wTopDown/wBottomUp` is the
+> veridical↔hallucination dial. The description below is kept for the earlier
+> open-loop state and still applies to the non-SOM backends (which stay pure
+> readouts with the `Category` layer driving a uniform top-down).
+
+Earlier (open-loop) state and the non-SOM backends: **there were two separate
+"category" systems, not connected.**
 
 | | **`Category` population** | **SOM (`Classifiers.py`)** |
 |---|---|---|

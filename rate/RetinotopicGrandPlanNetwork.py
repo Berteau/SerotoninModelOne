@@ -72,6 +72,11 @@ class RetinotopicGrandPlanNetwork:
         # per-column TopDown input population with the winning category's
         # template (content-specific feedback; zero on reject).
         self.useART = bool(params.get("useART", False))
+        # Closed-loop SOM feedback: the external SOM classifier drives a per-column
+        # TopDown population with its winning node's template each step (the same
+        # topographic feedback machinery as the ART path, but driven by the SOM).
+        self.somTopDown = bool(params.get("somTopDown", False))
+        self.topDownDriver = None            # optional per-step callable (set by the sim)
         self.art = None
         self.artActive = False
         # V1 column rate (Hz) that maps to feature value 1.0 when normalizing the
@@ -113,8 +118,9 @@ class RetinotopicGrandPlanNetwork:
         p["V1pyr"].trackInfluence = False
 
         # ---- secondary area ----
-        if self.useART:
-            # Per-column top-down input population driven by the ART classifier.
+        if self.useART or self.somTopDown:
+            # Per-column top-down input population driven by the classifier (ART or
+            # the closed-loop SOM).
             p["TopDown"] = RatePopulation(tau, None, self.nCols, [], {}, self, "TopDown",
                                           isInput=True, inputRate=0.0)
         else:
@@ -202,10 +208,10 @@ class RetinotopicGrandPlanNetwork:
             return None
         p["V1fs"].addOutboundConnections(p["V1pyr"], fsToV1)
 
-        if self.useART:
+        if self.useART or self.somTopDown:
             # Top-down feedback: TopDown column c -> V1pyr cells in column c.
-            # The ART classifier sets TopDown column rates each step to the
-            # winning category's template (retinotopic, content-specific).
+            # The classifier sets TopDown column rates each step to the winning
+            # category's template (retinotopic, content-specific).
             def topDownToV1(source, target):
                 if source._idx == self._colOf(target._idx, cpc):
                     w = params["categoryToV1Weight"] / cpc
@@ -237,7 +243,7 @@ class RetinotopicGrandPlanNetwork:
     def _assignV1Streams(self):
         # Tag each V1 pyramidal's inbound source populations into Sulfaro streams.
         p = self.populations
-        topDownPop = p["TopDown"] if self.useART else p["Category"]
+        topDownPop = p["TopDown"] if (self.useART or self.somTopDown) else p["Category"]
         streamByPop = {
             p["VisualInput"]: STREAM_BOTTOMUP,
             p["AudioInput"]: STREAM_BOTTOMUP,   # cross-modal ascending drive
@@ -252,7 +258,7 @@ class RetinotopicGrandPlanNetwork:
     def _serotoninTargets(self):
         # Populations carrying somatic serotonin receptors (exclude input pops).
         keys = ["V1pyr", "V1fs"]
-        if not self.useART:
+        if not (self.useART or self.somTopDown):
             keys.append("Category")
         return keys
 
@@ -491,10 +497,20 @@ class RetinotopicGrandPlanNetwork:
     def step(self):
         if self.useART and self.art is not None and self.artActive:
             self.updateTopDownFromART()
+        elif self.topDownDriver is not None:
+            self.topDownDriver()
         for population in self.populations.values():
             population.stepCells()
         for population in self.populations.values():
             population.stepOutputs()
+
+    def setTopDownTemplate(self, template, gain=1.0):
+        # Drive the TopDown population with a per-column template in [0,1]
+        # (the winning SOM node's weights), scaled to Hz. gain scales the drive
+        # magnitude (the feedback strength); 0 template -> silent top-down.
+        rates = np.clip(np.asarray(template, dtype=float), 0.0, 1.0) * self.topDownDriveHz * gain
+        for cell, r in zip(self.populations["TopDown"].cells, rates):
+            cell.setRate(float(r))
 
 
 def pretrainART(network, inputSet, art, settleMs):

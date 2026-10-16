@@ -36,10 +36,15 @@ class RetinotopicV31Simulation(RetinotopicGrandPlanSimulation):
         p = dict(params)
         p["useART"] = False                      # classifier managed here, not in the network
         p["emergent5HT"] = True                  # reuse the emergent controller
+        # Close the loop only for the SOM (it exposes a per-node V1-space template);
+        # other backends stay pure readouts (the in-network Category drives top-down).
+        kind = p.get("classifierType", "KOHONEN_SOM")
+        p["somTopDown"] = bool(p.get("somTopDown", True)) and (kind == "KOHONEN_SOM")
         super().__init__(p, presenter.inputSet.stimuli[0], presenter.inputSet,
                          mode=mode, plasticityEnabled=plasticityEnabled)
         self.presenter = presenter
         self.seed = seed
+        self.somFeedbackGain = float(p.get("somFeedbackGain", 1.0))
 
         self.presentationMs = float(p.get("presentationMs", 100.0))
         self.baselineMs = float(p.get("baselineMs", 10000.0))
@@ -91,6 +96,12 @@ class RetinotopicV31Simulation(RetinotopicGrandPlanSimulation):
             dt = self._ctrlEvery * self.tau
             self._aEMA += (dt / self._aEMAtau) * (inst - self._aEMA)
         return self._aEMA
+
+    # --- closed-loop top-down: SOM winning node's template -> TopDown population ---
+    def _driveTopDown(self):
+        feat = self.network.v1FeatureVector()
+        tmpl = self.classifier.top_down_template(feat)
+        self.network.setTopDownTemplate(tmpl, self.somFeedbackGain)
 
     # --- classifier pretraining on TRIAL-DISTRIBUTION features ---
     def _pretrainClassifier(self):
@@ -157,9 +168,14 @@ class RetinotopicV31Simulation(RetinotopicGrandPlanSimulation):
         self.network.setCellHistoryRecording(False)
 
         # Warm up the network, then pretrain the classifier on sighted
-        # trial-distribution features.
+        # trial-distribution features (top-down loop OFF so pretrain sees clean
+        # bottom-up V1).
         self._stepFor(self.warmupMs, record=False)
         self._pretrainClassifier()
+        # Close the SOM->V1 loop for the baseline + trial: the winning node's
+        # template is projected back as topographic top-down each step.
+        if self.network.somTopDown and hasattr(self.classifier, "top_down_template"):
+            self.network.topDownDriver = self._driveTopDown
 
         # Plasticity ON from the sighted baseline (cross-modal drive can build).
         if self.plasticityEnabled:

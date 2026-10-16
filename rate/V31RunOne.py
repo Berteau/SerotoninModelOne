@@ -51,6 +51,8 @@ def main():
     ap.add_argument("--pretrain-epochs", type=int, default=8, help="pretrain passes to form visual categories")
     ap.add_argument("--vigilance", type=float, default=None, help="ART vigilance (cluster granularity); higher -> more, finer clusters")
     ap.add_argument("--som-size", type=int, default=None, help="SOM grid side (default auto from class count)")
+    ap.add_argument("--som-feedback-gain", type=float, default=1.0, help="closed-loop SOM top-down drive gain (Sulfaro feedback dial)")
+    ap.add_argument("--no-top-down", action="store_true", help="disable the closed SOM->V1 loop (pure readout)")
     ap.add_argument("--figdir", default=None, help="directory for figures (default <out>_figs)")
     ap.add_argument("--no-plots", action="store_true", help="skip figure generation (pickle only)")
     ap.add_argument("--remap-lr", type=float, default=None, help="gamma_p; default = params/10")
@@ -121,6 +123,9 @@ def main():
         p["artVigilance"] = args.vigilance
     if args.som_size is not None:
         p["somSide"] = args.som_size
+    p["somFeedbackGain"] = args.som_feedback_gain
+    if args.no_top_down:
+        p["somTopDown"] = False
     p["gamma_p"] = args.remap_lr if args.remap_lr is not None else p["gamma_p"] / 10.0
     p["presentationMs"] = args.presentation_ms
     p["baselineMs"] = args.baseline_ms

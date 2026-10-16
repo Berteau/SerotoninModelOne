@@ -121,6 +121,12 @@ def buildGrandPlanParams(gridSize=10, cellsPerColumn=8, categoryCount=2):
     params["classifierType"] = "KOHONEN_SOM"     # KOHONEN_SOM | FUZZY_ART | FUZZY_ARTMAP | KNN
     params["classifierLearningRate"] = 0.05      # SOM alpha / ART beta / KNN step (SLOW, trial-time)
     params["somSide"] = None                     # SOM grid side (None -> auto from class count)
+    # Closed-loop SOM top-down: the winning SOM node projects its template back as
+    # topographic top-down into V1 (replacing the untrained Category layer), so
+    # top-down is a learned prediction. somFeedbackGain scales that drive; with
+    # the Sulfaro wTopDown/wBottomUp mixture it is the veridical<->hallucination dial.
+    params["somTopDown"] = True
+    params["somFeedbackGain"] = 1.0
     params["classifierPretrainRate"] = 1.0       # FAST rate used ONLY during pretraining (ART beta)
     params["classifierPretrainEpochs"] = 8       # pretrain passes over the stimuli to form categories
     params["classifierPretrainExposures"] = 4    # sighted exposures PER stimulus collected for pretrain
