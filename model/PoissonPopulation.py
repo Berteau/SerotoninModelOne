@@ -28,3 +28,8 @@ class PoissonPopulation(Population):
         # Inbound connections will call registerInboundConnection() as they are created, either via this population or via another.
         # Note: We handle internal connections as just outbound from and inbound to the same population
 
+    def setRate(self, meanSpikesPerSecond):
+        self.meanSpikesPerSecond = meanSpikesPerSecond
+        for cell in self.cells:
+            cell.setRate(meanSpikesPerSecond)
+

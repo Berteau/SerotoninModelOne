@@ -26,6 +26,11 @@ class PoissonNeuron(Neuron):
         self.vv = []
         self.spikeRecord = []
 
+    def setRate(self, meanSpikesPerSecond):
+        self.expectedMeanSpikeRate = meanSpikesPerSecond
+        self.meanSpikeProbabilityPerMs = (self.expectedMeanSpikeRate / 10)
+        self.poissonLambda = self.meanSpikeProbabilityPerMs * self.tau
+
     def step(self):
         self.time += self.tau
         # Evaluate Poisson source

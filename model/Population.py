@@ -119,8 +119,15 @@ class Population():
         windowSize = window[1] - window[0]
         scaleFactor = stepsPerSecond / windowSize
         for cell in self.cells:
-            for spike in cell.spikeRecord:
-                if window[0] < spike < window[1]:
+            # spikeRecord is appended in non-decreasing time order, so we can
+            # walk backward from the most recent spike and stop as soon as we
+            # fall out of the window, instead of rescanning the cell's entire
+            # spike history (which otherwise makes every step's cost grow
+            # with total elapsed spikes across the whole run).
+            for spike in reversed(cell.spikeRecord):
+                if spike <= window[0]:
+                    break
+                if spike < window[1]:
                     rate += 1
         return rate * scaleFactor
 
